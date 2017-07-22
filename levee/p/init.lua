@@ -75,6 +75,7 @@ local M = {
 	uri = require("levee.p.uri"),
 	line = require("levee.p.line"),
 	base64 = require("levee.p.base64"),
+	sha1 = require("levee.p.sha1"),
 
 	StringStream = StringStream,
 }
