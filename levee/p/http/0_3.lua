@@ -5,6 +5,7 @@ local errors = require("levee.errors")
 local _ = require("levee._")
 local json = require("levee.p.json")
 local meta = require("levee.meta")
+local ws = require("levee.p.ws")
 local Map = require("levee.d.map")
 local Parser = require("levee.p.http.parse")
 local Status = require("levee.p.http.status")
@@ -474,6 +475,52 @@ function Client_mt:post(path, options)
 end
 
 
+function Client_mt:upgrade(path, options)
+	if self.ws_state == "CONNECTING" then return errors.ws.CONNECTING end
+
+	local s, r = self.hub:pipe()
+
+	local function handshake()
+		self.ws_state = "CONNECTING"
+
+		local ws_s, ws_r = ws.client_handshake(self.hub, options)
+
+		function fail(err)
+			self.ws_state = nil
+			self:close()
+
+			s:error(err)
+			s:close()
+
+			ws_s:error(err)
+			ws_s:close()
+		end
+
+		local err, options = ws_r:recv()
+		if err then return fail(err) end
+
+		local err, res = self:get(path, options)
+		if err then return fail(err) end
+
+		err, res = res:recv()
+		if err then return fail(err) end
+
+		ws_s:send(res)
+
+		err, open = ws_r:recv()
+		if err then return fail(err) end
+
+		self.ws_state = open[1] and "OPEN" or nil
+		s:send(res)
+		s:close()
+		ws_r:close()
+	end
+	self.hub:spawn(handshake)
+
+	return nil, r
+end
+
+
 function Client_mt:close()
 	if self.closed then return end
 	self.closed = true
@@ -735,6 +782,8 @@ function HTTP_mt:connect(port, host, options)
 
 	local err, peer = _.getpeername(conn.no)
 
+	-- TODO "The Host field value MUST represent the naming authority of the
+	-- origin server or gateway given by the original URL" - rfc2616
 	if peer:port() ~= 80 then
 		m.HOST = ("%s:%s"):format(options.host, options.port)
 	else

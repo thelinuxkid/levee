@@ -176,7 +176,9 @@ local function encode_request(buf, method, path, params, headers, body)
 	buf:push(("%s %s %s%s"):format(method, path, VERSION, CRLF))
 
 	if not headers then headers = Map() end
-	-- TODO: Host
+	-- TODO Host header: "The Host field value MUST represent the naming
+	-- authority of the origin server or gateway given by the original URL" -
+	-- rfc2616
 	if not headers["User-Agent"] then
 		add_header(headers, "User-Agent", USER_AGENT)
 	end
