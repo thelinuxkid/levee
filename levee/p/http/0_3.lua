@@ -681,6 +681,28 @@ function Server_mt:reader(requests, responses, response_to_request)
 end
 
 
+function Server_mt:upgrade(status, headers)
+	headers = headers or {}
+
+	function fail(err)
+		self:close()
+		return err
+	end
+
+	local err, req = self:recv()
+	if err then return fail(err) end
+
+	local err, h = ws.server_handshake(req)
+	if err then return fail(err) end
+
+	for k,v in pairs(h) do
+		headers[k] = v
+	end
+
+	return req.response:send({status, headers})
+end
+
+
 function Server_mt:close()
 	if self.closed then return end
 	self.closed = true

@@ -73,7 +73,6 @@ ws.client_handshake = function(hub, options)
 			end
 		end
 
-
 		local header = headers["Upgrade"]
 		if not header or header:lower() ~= "websocket" then
 			return fail(errors.ws.HEADER)
@@ -101,7 +100,51 @@ ws.client_handshake = function(hub, options)
 end
 
 
-ws.server_handshake = function(hub, options)
+ws.server_handshake = function(req)
+	-- TODO support Origin header
+	-- TODO support Sec-WebSocket-Protocol
+	-- TODO support Sec-WebSocket-Extensions
+
+	if req.method ~= "GET" then return errors.ws.METHOD end
+
+	headers = req.headers
+	if not headers then return errors.ws.HEADER end
+
+	-- test for header presence with the case-insensitive d.Map
+	if type(req.headers) == "table" then
+		headers = Map()
+		for k,v in pairs(req.headers or {}) do
+			headers:add(k, v)
+		end
+	end
+
+	local header = headers["Host"]
+	if not header then return errors.ws.HEADER end
+
+	header = headers["Upgrade"]
+	if not header or header:lower() ~= "websocket" then
+		return errors.ws.HEADER
+	end
+
+	header = headers["Connection"]
+	if not header or header:lower() ~= "upgrade" then
+		return errors.ws.HEADER
+	end
+
+	header = headers["Sec-WebSocket-Version"]
+	if not header or header ~= VERSION then return errors.ws.VERSION end
+
+	local key = headers["Sec-WebSocket-Key"]
+	if not key then return errors.ws.KEY end
+
+	-- TODO use d.Map as default for headers when supported by caller
+	headers = {}
+
+	headers["Upgrade"] = "websocket"
+	headers["Connection"] = "Upgrade"
+	headers["Sec-WebSocket-Accept"] = ws.server_key(key)
+
+	return nil, headers
 end
 
 
@@ -180,6 +223,8 @@ end
 errors.add(20100, "ws", "CONNECTING", "connecting already in progress")
 errors.add(20101, "ws", "HEADER", "header is invalid or missing")
 errors.add(20102, "ws", "KEY", "websocket key is invalid or missing")
+errors.add(20103, "ws", "VERSION", "websocket version is invalid or missing")
+errors.add(20104, "ws", "METHOD", "websocket method is not GET")
 
 
 return ws

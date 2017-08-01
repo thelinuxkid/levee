@@ -567,6 +567,7 @@ return {
 		local err, response = response:recv()
 		assert.equal(response.code, 101)
 		assert.equal(c.ws_state, "OPEN")
+		assert(not c.closed)
 	end,
 
 	test_client_upgrade_headers = function()
@@ -607,6 +608,7 @@ return {
 		local err, response = response:recv()
 		assert.equal(response.code, 101)
 		assert.equal(c.ws_state, "OPEN")
+		assert(not c.closed)
 	end,
 
 	test_client_upgrade_connecting = function()
@@ -621,6 +623,7 @@ return {
 		local err, response = c:upgrade("/")
 		local err = c:upgrade("/")
 		assert(err.is_ws_CONNECTING)
+		assert(not c.closed)
 	end,
 
 	test_client_upgrade_server_error = function()
@@ -661,6 +664,7 @@ return {
 		local err, response = response:recv()
 		assert(err.is_ws_HEADER)
 		assert(not c.ws_state)
+		assert(c.closed)
 	end,
 
 	test_client_upgrade_key_error = function()
@@ -687,5 +691,108 @@ return {
 		local err = response:recv()
 		assert(err.is_ws_KEY)
 		assert(not c.ws_state)
+		assert(c.closed)
+	end,
+
+	test_server_upgrade = function()
+		local ws = require("levee.p.ws")
+		local levee = require("levee")
+		local h = levee.Hub()
+
+		local err, serve = h.http:listen()
+		local err, addr = serve:addr()
+
+		local err, c = h.http:connect(addr:port())
+		local err, response = c:get("/chat", { headers = {
+			Upgrade="websocket",
+			Connection="Upgrade",
+			["Sec-WebSocket-Key"]="fBeb4BXsUfeifNzKSE6iFCM=",
+			["Sec-WebSocket-Version"]="13"}})
+
+		local err, s = serve:recv()
+		local err = s:upgrade(levee.HTTPStatus(101), {foo="bar"})
+		assert(not err)
+
+		local err, res = response:recv()
+		assert.equal(res.code, 101)
+		assert.equal(res.headers["foo"], "bar")
+		assert.equal(res.headers["Upgrade"], "websocket")
+		assert.equal(res.headers["Connection"], "Upgrade")
+		assert.equal(res.headers["Sec-WebSocket-Accept"], "5auaBIrOcaAyKr0rvy1lvPAuLMU=")
+		assert(not s.closed)
+	end,
+
+	test_server_upgrade_method_error = function()
+		local ws = require("levee.p.ws")
+		local levee = require("levee")
+		local h = levee.Hub()
+
+		local err, serve = h.http:listen()
+		local err, addr = serve:addr()
+
+		local err, c = h.http:connect(addr:port())
+		local err, response = c:post("/chat", {headers={}})
+
+		local err, s = serve:recv()
+		local err = s:upgrade()
+		assert(err.is_ws_METHOD)
+		assert(s.closed)
+	end,
+
+	test_server_upgrade_header_error = function()
+		local ws = require("levee.p.ws")
+		local levee = require("levee")
+		local h = levee.Hub()
+
+		local err, serve = h.http:listen()
+		local err, addr = serve:addr()
+
+		local err, c = h.http:connect(addr:port())
+		local err, response = c:get("/chat", {headers={}})
+
+		local err, s = serve:recv()
+		local err = s:upgrade()
+		assert(err.is_ws_HEADER)
+		assert(s.closed)
+	end,
+
+	test_server_upgrade_key_error = function()
+		local ws = require("levee.p.ws")
+		local levee = require("levee")
+		local h = levee.Hub()
+
+		local err, serve = h.http:listen()
+		local err, addr = serve:addr()
+
+		local err, c = h.http:connect(addr:port())
+		local err, response = c:get("/chat", { headers = {
+			Upgrade="websocket",
+			Connection="Upgrade",
+			["Sec-WebSocket-Version"]="13"}})
+
+		local err, s = serve:recv()
+		local err = s:upgrade()
+		assert(err.is_ws_KEY)
+		assert(s.closed)
+	end,
+
+	test_server_upgrade_version_error = function()
+		local ws = require("levee.p.ws")
+		local levee = require("levee")
+		local h = levee.Hub()
+
+		local err, serve = h.http:listen()
+		local err, addr = serve:addr()
+
+		local err, c = h.http:connect(addr:port())
+		local err, response = c:get("/chat", { headers = {
+			Upgrade="websocket",
+			Connection="Upgrade",
+			["Sec-WebSocket-Key"]="fBeb4BXsUfeifNzKSE6iFCM="}})
+
+		local err, s = serve:recv()
+		local err = s:upgrade()
+		assert(err.is_ws_VERSION)
+		assert(s.closed)
 	end,
 }
