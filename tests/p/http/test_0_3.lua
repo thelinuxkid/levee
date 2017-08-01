@@ -694,6 +694,33 @@ return {
 		assert(c.closed)
 	end,
 
+	test_client_upgrade_key_whitespace = function()
+		local ws = require("levee.p.ws")
+		local levee = require("levee")
+		local h = levee.Hub()
+
+		local err, serve = h.http:listen()
+		local err, addr = serve:addr()
+
+		local err, c = h.http:connect(addr:port())
+		local err, response = c:upgrade("/")
+
+		local err, s = serve:recv()
+		local err, req = s:recv()
+
+		local key = ws.server_key(req.headers["Sec-WebSocket-Key"])
+		key = "		"..key.."   "
+		local headers = {
+			Upgrade="websocket",
+			Connection="upgrade",
+			["Sec-WebSocket-Accept"]=key,
+		}
+		req.response:send({levee.HTTPStatus(101), headers})
+
+		local err, response = response:recv()
+		assert.equal(response.code, 101)
+	end,
+
 	test_server_upgrade = function()
 		local ws = require("levee.p.ws")
 		local levee = require("levee")

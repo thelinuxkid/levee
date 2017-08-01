@@ -14,6 +14,11 @@ local GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 local ws = {}
 
 
+local function trim(s)
+	if s then return (s:gsub("^%s*(.-)%s*$", "%1")) end
+end
+
+
 --
 -- Handshake
 
@@ -84,6 +89,7 @@ ws.client_handshake = function(hub, options)
 		end
 
 		header = headers["Sec-WebSocket-Accept"]
+		header = trim(header)
 		if not header or header ~= ws.server_key(key) then
 			return fail(errors.ws.KEY)
 		end
