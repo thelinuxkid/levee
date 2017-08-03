@@ -26,9 +26,16 @@ local BYTE = 0xff
 local OCTECT = 0x8
 local LEN = 0x10
 
-local LEN_MAX = 125
-local LEN_16_MAX = 126
-local LEN_63_MAX = 127
+--
+-- constants
+
+local LEN_16 = 126
+local LEN_64 = 127
+
+local LEN_8_MAX = 125
+local LEN_16_MAX = 0xffff
+local LEN_64_MAX = 0xffffffffffffffff
+
 
 local ws = {}
 
@@ -107,27 +114,42 @@ local function encode(fin, mask, n, opcode)
 	--
 	-- payload len
 
-	-- number of bytes need to encode the length of the payload. This is at
-	-- least 2, but, could be up to 4 depending on the length (see below)
+	-- the value to encode as payload len
+	-- if n <= 125 then l = n
+	-- if n > 125 and n <= UINT16_MAX then l = 126
+	-- if n > UINT16_MAX and n <= UINT64_MAX then l = 127
+	local l = n
+
+	-- the number of bytes need to encode the actual length of the
+	-- payload (n). This is 2 if n <= 125 else it's 4.
 	local b = 2
 
-	-- if the length is =< 125 then we only need to encode 2 bytes
-	if n <= LEN_MAX then
-		-- shift the len of the payload to the appropriate place in our 32-bit
-		-- int, i.e., bits 17-23 from the MSB. The MSB of the len is ignored
-		-- since, here, it can only have a value range of 0-125 (see below for
-		-- 16-bit and 64-bit lengths).
-		n = bit.lshift(n, LEN)
-		-- combine the shifted len with our int
+	if n > LEN_64_MAX then return errors.ws.LENGTH end
+	if n > LEN_16_MAX then
+		l = LEN_64
+		b = 4
+	elseif n > LEN_8_MAX then
+		l = LEN_16
+		b = 4
+	end
+
+	-- shift payload len to the appropriate place in our 32-bit int,
+	-- i.e., bits 17-23 from the MSB. The MSB of payload len is ignored
+	-- since it can only have a value range of 0-127.
+	ls = bit.lshift(l, LEN)
+	-- combine the shifted payload len with our 32-bit int
+	i = bit.bor(i, ls)
+
+	if l == LEN_16 then
+		-- encode the length of the payload (n) in the last 2 bytes of our
+		-- 32-bit int.
 		i = bit.bor(i, n)
 	end
 
--- TODO extended length. Multibyte length quantities are expressed in
--- network byte order.  In all cases, the minimal number of bytes MUST be
--- used to encode the length, for example, the length of a 124-byte-long
--- string can't be encoded as the sequence 126, 0, 124
+	if l == LEN_64 then
+	end
 
-	return i, b
+	return nil, i, b
 end
 
 --
@@ -276,7 +298,11 @@ end
 ws.server_encode = function(buf, s, n)
 	-- FIN bit set, opcode of TEXT or BIN and data not masked
 
-	local i, b = encode(true, false, n)
+	if not n then n = s:len() end
+
+	local err, i, b = encode(true, false, n)
+	if err then return err end
+
 	-- push these bytes before we continue with the payload
 	push_int(buf, i, b)
 
@@ -351,6 +377,7 @@ errors.add(20101, "ws", "HEADER", "header is invalid or missing")
 errors.add(20102, "ws", "KEY", "websocket key is invalid or missing")
 errors.add(20103, "ws", "VERSION", "websocket version is invalid or missing")
 errors.add(20104, "ws", "METHOD", "websocket method is not GET")
+errors.add(20104, "ws", "LENGTH", "payload length greater than UINT64")
 
 
 return ws
