@@ -298,6 +298,7 @@ end
 ws.server_encode = function(buf, s, n)
 	-- FIN bit set, opcode of TEXT or BIN and data not masked
 
+	if not s then s = "" end
 	if not n then n = s:len() end
 
 	local err, i, b = encode(true, false, n)
