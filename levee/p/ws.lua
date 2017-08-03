@@ -11,6 +11,25 @@ local VERSION = "13"
 local GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 
+--
+-- bit masks. all bit module operations are based on 32-bit integers
+
+local FIN = 0x80000000
+local CONT = 0x0
+local TEXT = 0x1000000
+local BIN = 0x2000000
+local CLOSE = 0x8000000
+local PING = 0x9000000
+local PONG = 0xa000000
+local MASK = 0x800000
+local BYTE = 0xff
+local OCTECT = 0x8
+local LEN = 0x10
+
+local LEN_MAX = 125
+local LEN_16_MAX = 126
+local LEN_63_MAX = 127
+
 local ws = {}
 
 
@@ -18,6 +37,98 @@ local function trim(s)
 	if s then return (s:gsub("^%s*(.-)%s*$", "%1")) end
 end
 
+
+local function push_int(buf, i, b)
+	-- push b bytes from a 32-bit int, i, into buf
+	if not b then b = 0 end
+	b = 4 - b
+	for j=3,0,-1 do
+		local m = bit.lshift(BYTE, OCTECT*j)
+		local c = bit.band(i, m)
+		c = bit.rshift(c, OCTECT*j)
+		c = string.char(c)
+		buf:push(c)
+		if j == b then break end
+	end
+end
+
+
+local function encode(fin, mask, n, opcode)
+	--      0                   1                   2                   3
+	--      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+	--     +-+-+-+-+-------+-+-------------+-------------------------------+
+	--     |F|R|R|R| opcode|M| Payload len |    Extended payload length    |
+	--     |I|S|S|S|  (4)  |A|     (7)     |             (16/64)           |
+	--     |N|V|V|V|       |S|             |   (if payload len==126/127)   |
+	--     | |1|2|3|       |K|             |                               |
+	--     +-+-+-+-+-------+-+-------------+ - - - - - - - - - - - - - - - +
+	--     |     Extended payload length continued, if payload len == 127  |
+	--     + - - - - - - - - - - - - - - - +-------------------------------+
+	--     |                               |Masking-key, if MASK set to 1  |
+	--     +-------------------------------+-------------------------------+
+	--     | Masking-key (continued)       |          Payload Data         |
+	--     +-------------------------------- - - - - - - - - - - - - - - - +
+	--     :                     Payload Data continued ...                :
+	--     + - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - +
+	--     |                     Payload Data continued ...                |
+	--     +---------------------------------------------------------------+
+
+
+	-- note: all bit module operations return 32-bit ints.
+
+	-- start with a 32-bit int which is used to encode FIN, RSVs, opcode,
+	-- MASK and payload len.
+	local i = bit.tobit(0)
+
+	--
+	-- FIN bit
+
+	if fin then i = bit.bor(FIN) end
+
+	--
+	-- RSVs
+
+	-- the next three bits (RSV1, RSV2, RSV3) are set when there are
+	-- extensions present
+	-- TODO support extensions here
+
+	--
+	-- opcode
+
+	-- default frame type is binary
+	if not opcode then opcode = BIN end
+	i = bit.bor(i, opcode)
+
+	--
+	-- MASK
+
+	if mask then i = bit.bor(i, MASK) end
+
+	--
+	-- payload len
+
+	-- number of bytes need to encode the length of the payload. This is at
+	-- least 2, but, could be up to 4 depending on the length (see below)
+	local b = 2
+
+	-- if the length is =< 125 then we only need to encode 2 bytes
+	if n <= LEN_MAX then
+		-- shift the len of the payload to the appropriate place in our 32-bit
+		-- int, i.e., bits 17-23 from the MSB. The MSB of the len is ignored
+		-- since, here, it can only have a value range of 0-125 (see below for
+		-- 16-bit and 64-bit lengths).
+		n = bit.lshift(n, LEN)
+		-- combine the shifted len with our int
+		i = bit.bor(i, n)
+	end
+
+-- TODO extended length. Multibyte length quantities are expressed in
+-- network byte order.  In all cases, the minimal number of bytes MUST be
+-- used to encode the length, for example, the length of a 124-byte-long
+-- string can't be encoded as the sequence 126, 0, 124
+
+	return i, b
+end
 
 --
 -- Handshake
@@ -163,6 +274,15 @@ end
 
 
 ws.server_encode = function(buf, s, n)
+	-- FIN bit set, opcode of TEXT or BIN and data not masked
+
+	local i, b = encode(true, false, n)
+	-- push these bytes before we continue with the payload
+	push_int(buf, i, b)
+
+	-- the remainder is extension data + application data (s).
+	-- TODO support extensions here
+	buf:push(s)
 end
 
 
