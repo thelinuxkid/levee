@@ -22,16 +22,14 @@ local CLOSE = 0x8000000
 local PING = 0x9000000
 local PONG = 0xa000000
 local MASK = 0x800000
-local BYTE = 0xff
-local OCTECT = 0x8
-local LEN = 0x10
 
 --
 -- constants
 
+local BYTE = 255
+local OCTECT = 8
 local LEN_16 = 126
 local LEN_64 = 127
-
 local LEN_8_MAX = 125
 local LEN_16_MAX = 0xffff
 local LEN_64_MAX = 0xffffffffffffffff
@@ -45,22 +43,20 @@ local function trim(s)
 end
 
 
-local function push_int(buf, i, b)
-	-- push b bytes from a 32-bit int, i, into buf
-	if not b then b = 0 end
-	b = 4 - b
-	for j=3,0,-1 do
-		local m = bit.lshift(BYTE, OCTECT*j)
-		local c = bit.band(i, m)
-		c = bit.rshift(c, OCTECT*j)
+local function push(buf, d, n)
+	-- push n bytes from d int buf
+	-- expects little-endian order
+	for i=n-1,0,-1 do
+		local m = bit.lshift(BYTE, OCTECT*i)
+		local c = bit.band(d, m)
+		c = bit.rshift(c, OCTECT*i)
 		c = string.char(c)
 		buf:push(c)
-		if j == b then break end
 	end
 end
 
 
-local function encode(fin, mask, n, opcode)
+local function encode(buf, fin, mask, n, opcode)
 	--      0                   1                   2                   3
 	--      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 	--     +-+-+-+-+-------+-+-------------+-------------------------------+
@@ -81,10 +77,10 @@ local function encode(fin, mask, n, opcode)
 	--     +---------------------------------------------------------------+
 
 
-	-- note: all bit module operations return 32-bit ints.
+	-- note: all bit module operations return 32-bit ints
 
 	-- start with a 32-bit int which is used to encode FIN, RSVs, opcode,
-	-- MASK and payload len.
+	-- MASK and payload len
 	local i = bit.tobit(0)
 
 	--
@@ -136,20 +132,27 @@ local function encode(fin, mask, n, opcode)
 	-- shift payload len to the appropriate place in our 32-bit int,
 	-- i.e., bits 17-23 from the MSB. The MSB of payload len is ignored
 	-- since it can only have a value range of 0-127.
-	ls = bit.lshift(l, LEN)
+	local s = bit.lshift(l, OCTECT*2)
 	-- combine the shifted payload len with our 32-bit int
-	i = bit.bor(i, ls)
+	i = bit.bor(i, s)
+
+	if b == 2 then
+		-- leave only the most significant 2 bytes
+		i = bit.rshift(i, OCTECT*2)
+	end
 
 	if l == LEN_16 then
 		-- encode the length of the payload (n) in the last 2 bytes of our
-		-- 32-bit int.
+		-- 32-bit int
 		i = bit.bor(i, n)
 	end
 
 	if l == LEN_64 then
 	end
 
-	return nil, i, b
+	push(buf, i, b)
+
+	return nil
 end
 
 --
@@ -301,11 +304,8 @@ ws.server_encode = function(buf, s, n)
 	if not s then s = "" end
 	if not n then n = s:len() end
 
-	local err, i, b = encode(true, false, n)
+	local err, i, b = encode(buf, true, false, n)
 	if err then return err end
-
-	-- push these bytes before we continue with the payload
-	push_int(buf, i, b)
 
 	-- the remainder is extension data + application data (s).
 	-- TODO support extensions here

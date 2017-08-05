@@ -2,7 +2,7 @@ local levee = require("levee")
 local ws = require("levee.p.ws")
 
 return {
-	test_server_encode = function()
+	test_encode = function()
 		local buf = levee.d.Buffer(4096)
 		local err = ws.server_encode(buf)
 
@@ -18,7 +18,7 @@ return {
 		assert.equal(string.byte(c), 0)
 	end,
 
-	test_server_encode_8bit_len = function()
+	test_encode_8bit_len = function()
 		local buf = levee.d.Buffer(4096)
 		local s = "Hello World"
 		local err = ws.server_encode(buf, s, s:len())
@@ -37,7 +37,7 @@ return {
 		assert.equal(buf:take(11), "Hello World")
 	end,
 
-	test_server_encode_8bit_len_max = function()
+	test_encode_8bit_len_max = function()
 		local buf = levee.d.Buffer(4096)
 		local s = string.rep("s", 125)
 		local err = ws.server_encode(buf, s, s:len())
@@ -56,7 +56,7 @@ return {
 		assert.equal(buf:take(125), s)
 	end,
 
-	test_server_encode_16bit_len = function()
+	test_encode_16bit_len = function()
 		local buf = levee.d.Buffer(0xfff*2)
 		local s = string.rep("s", 0xfff)
 		local err = ws.server_encode(buf, s, s:len())
@@ -68,7 +68,7 @@ return {
 		local c = buf:take(1)
 		assert.equal(string.byte(c), 130)
 
-		-- second byte: 01111110w
+		-- second byte: 01111111
 		c = buf:take(1)
 		assert.equal(string.byte(c), 126)
 
@@ -83,7 +83,7 @@ return {
 		assert.equal(buf:take(0xfff), s)
 	end,
 
-	test_server_encode_16bit_len_min = function()
+	test_encode_16bit_len_min = function()
 		local buf = levee.d.Buffer(4096)
 		local s = string.rep("s", 126)
 		local err = ws.server_encode(buf, s, s:len())
@@ -110,7 +110,7 @@ return {
 		assert.equal(buf:take(126), s)
 	end,
 
-	test_server_encode_16bit_len_max = function()
+	test_encode_16bit_len_max = function()
 		local buf = levee.d.Buffer(0xffff*2)
 		local s = string.rep("s", 0xffff)
 		local err = ws.server_encode(buf, s, s:len())
