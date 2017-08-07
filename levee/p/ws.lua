@@ -56,105 +56,6 @@ local function push(buf, d, n)
 end
 
 
-local function encode(buf, fin, mask, n, opcode)
-	--      0                   1                   2                   3
-	--      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-	--     +-+-+-+-+-------+-+-------------+-------------------------------+
-	--     |F|R|R|R| opcode|M| Payload len |    Extended payload length    |
-	--     |I|S|S|S|  (4)  |A|     (7)     |             (16/64)           |
-	--     |N|V|V|V|       |S|             |   (if payload len==126/127)   |
-	--     | |1|2|3|       |K|             |                               |
-	--     +-+-+-+-+-------+-+-------------+ - - - - - - - - - - - - - - - +
-	--     |     Extended payload length continued, if payload len == 127  |
-	--     + - - - - - - - - - - - - - - - +-------------------------------+
-	--     |                               |Masking-key, if MASK set to 1  |
-	--     +-------------------------------+-------------------------------+
-	--     | Masking-key (continued)       |          Payload Data         |
-	--     +-------------------------------- - - - - - - - - - - - - - - - +
-	--     :                     Payload Data continued ...                :
-	--     + - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - +
-	--     |                     Payload Data continued ...                |
-	--     +---------------------------------------------------------------+
-
-
-	-- note: all bit module operations return 32-bit ints
-
-	-- start with a 32-bit int which is used to encode FIN, RSVs, opcode,
-	-- MASK and payload len
-	local i = bit.tobit(0)
-
-	--
-	-- FIN bit
-
-	if fin then i = bit.bor(FIN) end
-
-	--
-	-- RSVs
-
-	-- the next three bits (RSV1, RSV2, RSV3) are set when there are
-	-- extensions present
-	-- TODO support extensions here
-
-	--
-	-- opcode
-
-	-- default frame type is binary
-	if not opcode then opcode = BIN end
-	i = bit.bor(i, opcode)
-
-	--
-	-- MASK
-
-	if mask then i = bit.bor(i, MASK) end
-
-	--
-	-- payload len
-
-	-- the value to encode as payload len
-	-- if n <= 125 then l = n
-	-- if n > 125 and n <= UINT16_MAX then l = 126
-	-- if n > UINT16_MAX and n <= UINT64_MAX then l = 127
-	local l = n
-
-	-- the number of bytes need to encode the actual length of the
-	-- payload (n). This is 2 if n <= 125 else it's 4.
-	local b = 2
-
-	if n > LEN_64_MAX then return errors.ws.LENGTH end
-	if n > LEN_16_MAX then
-		l = LEN_64
-		b = 4
-	elseif n > LEN_8_MAX then
-		l = LEN_16
-		b = 4
-	end
-
-	-- shift payload len to the appropriate place in our 32-bit int,
-	-- i.e., bits 17-23 from the MSB. The MSB of payload len is ignored
-	-- since it can only have a value range of 0-127.
-	local s = bit.lshift(l, OCTECT*2)
-	-- combine the shifted payload len with our 32-bit int
-	i = bit.bor(i, s)
-
-	if b == 2 then
-		-- leave only the most significant 2 bytes
-		i = bit.rshift(i, OCTECT*2)
-	end
-
-	if l == LEN_16 then
-		-- encode the length of the payload (n) in the last 2 bytes of our
-		-- 32-bit int
-		i = bit.bor(i, n)
-	end
-
-	if l == LEN_64 then
-	end
-
-	push(buf, i, b)
-
-	return nil
-end
-
 --
 -- Handshake
 
@@ -292,6 +193,106 @@ end
 
 --
 -- Message encoding
+
+
+ws.encode = function(buf, fin, mask, n, opcode)
+	--      0                   1                   2                   3
+	--      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+	--     +-+-+-+-+-------+-+-------------+-------------------------------+
+	--     |F|R|R|R| opcode|M| Payload len |    Extended payload length    |
+	--     |I|S|S|S|  (4)  |A|     (7)     |             (16/64)           |
+	--     |N|V|V|V|       |S|             |   (if payload len==126/127)   |
+	--     | |1|2|3|       |K|             |                               |
+	--     +-+-+-+-+-------+-+-------------+ - - - - - - - - - - - - - - - +
+	--     |     Extended payload length continued, if payload len == 127  |
+	--     + - - - - - - - - - - - - - - - +-------------------------------+
+	--     |                               |Masking-key, if MASK set to 1  |
+	--     +-------------------------------+-------------------------------+
+	--     | Masking-key (continued)       |          Payload Data         |
+	--     +-------------------------------- - - - - - - - - - - - - - - - +
+	--     :                     Payload Data continued ...                :
+	--     + - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - +
+	--     |                     Payload Data continued ...                |
+	--     +---------------------------------------------------------------+
+
+
+	-- note: all bit module operations return 32-bit ints
+
+	-- start with a 32-bit int which is used to encode FIN, RSVs, opcode,
+	-- MASK and payload len
+	local i = bit.tobit(0)
+
+	--
+	-- FIN bit
+
+	if fin then i = bit.bor(FIN) end
+
+	--
+	-- RSVs
+
+	-- the next three bits (RSV1, RSV2, RSV3) are set when there are
+	-- extensions present
+	-- TODO support extensions here
+
+	--
+	-- opcode
+
+	-- default frame type is binary
+	if not opcode then opcode = BIN end
+	i = bit.bor(i, opcode)
+
+	--
+	-- MASK
+
+	if mask then i = bit.bor(i, MASK) end
+
+	--
+	-- payload len
+
+	-- the value to encode as payload len
+	-- if n <= 125 then l = n
+	-- if n > 125 and n <= UINT16_MAX then l = 126
+	-- if n > UINT16_MAX and n <= UINT64_MAX then l = 127
+	local l = n
+
+	-- the number of bytes need to encode the actual length of the
+	-- payload (n). This is 2 if n <= 125 else it's 4.
+	local b = 2
+
+	if n > LEN_64_MAX then return errors.ws.LENGTH end
+	if n > LEN_16_MAX then
+		l = LEN_64
+		b = 4
+	elseif n > LEN_8_MAX then
+		l = LEN_16
+		b = 4
+	end
+
+	-- shift payload len to the appropriate place in our 32-bit int,
+	-- i.e., bits 17-23 from the MSB. The MSB of payload len is ignored
+	-- since it can only have a value range of 0-127.
+	local s = bit.lshift(l, OCTECT*2)
+	-- combine the shifted payload len with our 32-bit int
+	i = bit.bor(i, s)
+
+	if b == 2 then
+		-- leave only the most significant 2 bytes
+		i = bit.rshift(i, OCTECT*2)
+	end
+
+	if l == LEN_16 then
+		-- encode the length of the payload (n) in the last 2 bytes of our
+		-- 32-bit int
+		i = bit.bor(i, n)
+	end
+
+	if l == LEN_64 then
+	end
+
+	push(buf, i, b)
+
+	return nil
+end
 
 
 ws.client_encode = function(buf, s, n)
