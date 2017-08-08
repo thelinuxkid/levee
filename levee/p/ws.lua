@@ -265,10 +265,12 @@ ws.encode = function(buf, fin, opcode, mask, n)
 	--
 	-- payload len
 
-	-- the value to encode as payload len
-	-- if n <= 125 then payload_len = n
-	-- if n > 125 and n <= UINT16_MAX then payload_len = 126
-	-- if n > UINT16_MAX and n <= UINT64_MAX then payload_len = 127
+	-- the value to encode as payload len (l). This is different from the
+	-- length of the payload (n). Here, UINT64_MAX is the theoretical
+	-- max. The practical max for the BitOp module is 2^51 (LEN_MAX):
+	-- if n <= 125 then l = n
+	-- if n > 125 and n <= UINT16_MAX then l = 126
+	-- if n > UINT16_MAX and n <= UINT64_MAX then l = 127
 	local l = n
 
 	if n > UINT16_MAX then
@@ -277,11 +279,12 @@ ws.encode = function(buf, fin, opcode, mask, n)
 		l = LEN_16
 	end
 
-	-- shift payload len to the appropriate place in the data frame, i.e.,
-	-- bits 17-23 from the least-significant bit. The most-significant bit of
-	-- payload len is ignored since the allowed value range is 0-127.
+	-- shift payload len (l) to the appropriate place in the data frame,
+	-- i.e., bits 17-23 from the least-significant bit. The most-significant
+	-- bit of payload len (l) is ignored since the allowed value range is
+	-- 0-127.
 	local s = bit.lshift(l, OCTECT*2)
-	-- add the shifted payload len to the data frame
+	-- add the shifted payload len (l) to the data frame
 	f = bit.bor(f, s)
 
 	if n <= LEN_8 then
@@ -304,15 +307,15 @@ ws.encode = function(buf, fin, opcode, mask, n)
 	-- split the 64-bit length of the payload (n) into two 32-bit ints
 
 	-- The bit.tobit function normalizes numbers outside the 32-bit range by
-	-- returning their least-significant 32-bits. This is the first 32-bit
-	-- int
+	-- returning their least-significant 32 bits. This is the first 32-bit
+	-- int and the lower half of the 64-bit length of the payload (n)
 	local lsb = bit.tobit(n)
-	-- BitOp extension operations return signed 32-bit integers, but, the
+	-- BitOp extension operations return *signed* 32-bit integers, but, the
 	-- next step requires an unsigned integer
 	lsb = ffi.new("uint32_t", lsb)
 	lsb = tonumber(lsb)
-	-- now get the most-significant 32 bits of the 64-bit length of the
-	-- payload (n). This is the second 32-bit int.
+	-- now get the most-significant 32 bits. This is the second 32-bit int
+	-- and the upper half of the 64-bit length of the payload (n)
 	local msb = (n - lsb)/UINT32_MAX
 
 	-- split our second 32-bit int further. The most-significant 16 bits of
@@ -320,7 +323,8 @@ ws.encode = function(buf, fin, opcode, mask, n)
 	n = bit.rshift(msb, OCTECT*2)
 	f = bit.bor(f, n)
 
-	-- push the first 32 bits of the data frame
+	-- push the first 32 bits of the data frame, i.e., the initial 32-bit int
+	-- (f)
 	push(buf, f, 4)
 
 	-- push the least-significant 16 bits of the result of the last operation
@@ -329,7 +333,8 @@ ws.encode = function(buf, fin, opcode, mask, n)
 	msb = bit.band(msb, UINT16_MAX)
 	push(buf, msb, 2)
 
-	-- push the first 32-bit int as the next part of the data frame
+	-- push the least-siginificant 32 bits of the length of the payload (n)
+	-- as the next part of the data frame
 	push(buf, lsb, 4)
 end
 
