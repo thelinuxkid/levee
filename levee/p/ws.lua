@@ -11,6 +11,7 @@ local VERSION = "13"
 local GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 
+--
 -- bit masks. All BitOp extension operations are based on 32-bit integers
 
 local FIN = 0x80000000
@@ -21,6 +22,7 @@ local CLOSE = 0x8000000
 local PING = 0x9000000
 local PONG = 0xa000000
 local MASK = 0x800000
+
 
 --
 -- constants
@@ -36,9 +38,6 @@ local LEN_MAX = 0x7ffffffffffff
 
 local UINT16_MAX = 0xffff
 local UINT32_MAX = 0xffffffff
-
-
-local ws = {}
 
 
 local function trim(s)
@@ -58,6 +57,16 @@ local function push(buf, d, n)
 		buf:push(c)
 	end
 end
+
+
+local ws = {
+	CONT=CONT,
+	TEXT=TEXT,
+	BIN=BIN,
+	CLOSE=CLOSE,
+	PING=PING,
+	PONG=PONG,
+}
 
 
 --
@@ -199,7 +208,7 @@ end
 -- Message encoding
 
 
-ws.encode = function(buf, fin, mask, n, opcode)
+ws.encode = function(buf, fin, opcode, mask, n)
 	if n < 0 then return errors.ws.MINLEN end
 	if n > LEN_MAX then return errors.ws.MAXLEN end
 
@@ -227,8 +236,8 @@ ws.encode = function(buf, fin, mask, n, opcode)
 
 	-- note: all BitOp extension operations return signed 32-bit ints
 
-	-- start with a 32-bit int as the data frame. The FIN, RSVs, opcode,
-	-- MASK and payload len are encoded here (see figure above)
+	-- start with a 32-bit int as the data frame. This is where FIN, RSVs,
+	-- opcode, MASK and payload len will be encoded (see figure above)
 	local f = bit.tobit(0)
 
 	--
@@ -246,8 +255,6 @@ ws.encode = function(buf, fin, mask, n, opcode)
 	--
 	-- opcode
 
-	-- default frame type is binary
-	if not opcode then opcode = BIN end
 	f = bit.bor(f, opcode)
 
 	--
