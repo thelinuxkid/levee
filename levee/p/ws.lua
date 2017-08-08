@@ -30,9 +30,12 @@ local OCTECT = 8
 local LEN_8 = 125
 local LEN_16 = 126
 local LEN_64 = 127
+-- the BitOp module strongly advises not to use numbers outside of the
+-- -+2^51 range (see http://bitop.luajit.org/semantics.html)
+local LEN_MAX = 0x7ffffffffffff
+
 local UINT16_MAX = 0xffff
 local UINT32_MAX = 0xffffffff
-local UINT64_MAX = 0xffffffffffffffff
 
 
 local ws = {}
@@ -197,6 +200,9 @@ end
 
 
 ws.encode = function(buf, fin, mask, n, opcode)
+	if n < 0 then return errors.ws.MINLEN end
+	if n > LEN_MAX then return errors.ws.MAXLEN end
+
 	-- WebSocket data frame:
 	--
 	--      0                   1                   2                   3
@@ -257,10 +263,6 @@ ws.encode = function(buf, fin, mask, n, opcode)
 	-- if n > 125 and n <= UINT16_MAX then payload_len = 126
 	-- if n > UINT16_MAX and n <= UINT64_MAX then payload_len = 127
 	local l = n
-
-	-- TODO replace this next line with a line at the beginning guarding for
-	-- values above 2^51 (see http://bitop.luajit.org/semantics.html)
-	if n > UINT64_MAX then return errors.ws.LENGTH end
 
 	if n > UINT16_MAX then
 		l = LEN_64
@@ -409,7 +411,8 @@ errors.add(20101, "ws", "HEADER", "header is invalid or missing")
 errors.add(20102, "ws", "KEY", "websocket key is invalid or missing")
 errors.add(20103, "ws", "VERSION", "websocket version is invalid or missing")
 errors.add(20104, "ws", "METHOD", "websocket method is not GET")
-errors.add(20104, "ws", "LENGTH", "payload length greater than UINT64")
+errors.add(20105, "ws", "MAXLEN", "payload length greater than 2^51")
+errors.add(20106, "ws", "MINLEN", "payload length less than 0")
 
 
 return ws

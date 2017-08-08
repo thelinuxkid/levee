@@ -211,6 +211,20 @@ return {
 		assert.equal(string.byte(c), 255)
 	end,
 
+	test_encode_min_len = function()
+		local buf = levee.d.Buffer()
+		local err = ws.encode(buf, true, false, -1)
+
+		assert(err.is_ws_MINLEN)
+	end,
+
+	test_encode_max_len = function()
+		local buf = levee.d.Buffer()
+		local err = ws.encode(buf, true, false, 0x7ffffffffffff+1)
+
+		assert(err.is_ws_MAXLEN)
+	end,
+
 	test_server_key = function()
 		local key = ws.server_key("dGhlIHNhbXBsZSBub25jZQ==")
 		assert.equal(key, "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=")
