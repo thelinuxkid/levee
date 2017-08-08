@@ -11,8 +11,7 @@ local VERSION = "13"
 local GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 
---
--- bit masks. all bit module operations are based on 32-bit integers
+-- bit masks. All BitOp extension operations are based on 32-bit integers
 
 local FIN = 0x80000000
 local CONT = 0x0
@@ -46,7 +45,8 @@ end
 
 local function push(buf, d, n)
 	-- push n bytes from d int buf
-	-- expects little-endian order
+	-- converts from little-endian to network byte order (big-endian)
+	-- TODO support big-endian platforms
 	for i=n-1,0,-1 do
 		local m = bit.lshift(BYTE, OCTECT*i)
 		local c = bit.band(d, m)
@@ -98,9 +98,9 @@ ws.client_handshake = function(hub, options)
 		local err, res = r:recv()
 		if err then return r:close() end
 
-		-- we need a 101 to continue the handshake, but, another code doesn't
-		-- imply an error. For example, 401 and 3xx are acceptable response
-		-- codes that the user will have to handle separately
+		-- a 101 response is needed to continue the handshake, but, another
+		-- code doesn't imply an error. For example, 401 and 3xx are acceptable
+		-- response codes that the user will have to handle separately
 		if res.code ~= 101 then return s:send({false}) end
 
 		headers = res.headers
@@ -197,6 +197,8 @@ end
 
 
 ws.encode = function(buf, fin, mask, n, opcode)
+	-- WebSocket data frame:
+	--
 	--      0                   1                   2                   3
 	--      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 	--     +-+-+-+-+-------+-+-------------+-------------------------------+
@@ -217,16 +219,16 @@ ws.encode = function(buf, fin, mask, n, opcode)
 	--     +---------------------------------------------------------------+
 
 
-	-- note: all bit module operations return 32-bit ints
+	-- note: all BitOp extension operations return signed 32-bit ints
 
-	-- start with a 32-bit int which is used to encode FIN, RSVs, opcode,
-	-- MASK and payload len
-	local i = bit.tobit(0)
+	-- start with a 32-bit int as the data frame. The FIN, RSVs, opcode,
+	-- MASK and payload len are encoded here (see figure above)
+	local f = bit.tobit(0)
 
 	--
 	-- FIN bit
 
-	if fin then i = bit.bor(FIN) end
+	if fin then f = bit.bor(FIN) end
 
 	--
 	-- RSVs
@@ -240,81 +242,85 @@ ws.encode = function(buf, fin, mask, n, opcode)
 
 	-- default frame type is binary
 	if not opcode then opcode = BIN end
-	i = bit.bor(i, opcode)
+	f = bit.bor(f, opcode)
 
 	--
 	-- MASK
 
-	if mask then i = bit.bor(i, MASK) end
+	if mask then f = bit.bor(f, MASK) end
 
 	--
 	-- payload len
 
 	-- the value to encode as payload len
-	-- if n <= 125 then l = n
-	-- if n > 125 and n <= UINT16_MAX then l = 126
-	-- if n > UINT16_MAX and n <= UINT64_MAX then l = 127
+	-- if n <= 125 then payload_len = n
+	-- if n > 125 and n <= UINT16_MAX then payload_len = 126
+	-- if n > UINT16_MAX and n <= UINT64_MAX then payload_len = 127
 	local l = n
 
-	-- TODO this next line replace with a line at the beginning guarding for
-	-- values outside of 2^51 (see http://bitop.luajit.org/semantics.html)
+	-- TODO replace this next line with a line at the beginning guarding for
+	-- values above 2^51 (see http://bitop.luajit.org/semantics.html)
 	if n > UINT64_MAX then return errors.ws.LENGTH end
+
 	if n > UINT16_MAX then
 		l = LEN_64
 	elseif n > LEN_8 then
 		l = LEN_16
 	end
 
-	-- shift payload len to the appropriate place in our 32-bit int,
-	-- i.e., bits 17-23 from the MSB. The MSB of payload len is ignored
-	-- since it can only have a value range of 0-127.
+	-- shift payload len to the appropriate place in the data frame, i.e.,
+	-- bits 17-23 from the least-significant bit. The most-significant bit of
+	-- payload len is ignored since the allowed value range is 0-127.
 	local s = bit.lshift(l, OCTECT*2)
-	-- combine the shifted payload len with our 32-bit int
-	i = bit.bor(i, s)
+	-- add the shifted payload len to the data frame
+	f = bit.bor(f, s)
 
 	if n <= LEN_8 then
-		-- leave only the most-significant 2 bytes
-		i = bit.rshift(i, OCTECT*2)
-		push(buf, i, 2)
+		-- the length of the payload (n) is encoded as payload len (l), so, the
+		-- least-significant 16 bits of the data frame are not needed
+		f = bit.rshift(f, OCTECT*2)
+		push(buf, f, 2)
 		return
 	end
 
 	if l == LEN_16 then
-		-- encode the length of the payload (n) in the least-significant 2
-		-- bytes of our 32-bit int
-		i = bit.bor(i, n)
-		push(buf, i, 4)
+		-- encode the length of the payload (n) in the least-significant 16
+		-- bits of the data frame
+		f = bit.bor(f, n)
+		push(buf, f, 4)
 		return
 	end
 
-	-- since all bit module operations are based on 32-bit integers, split
-	-- the 64-bit length of the payload (n) into two 32-bit ints. The
-	-- bit.tobit function normalizes numbers outside the 32-bit range by
-	-- returning their least-significant 4 bytes
+	-- since all BitOp extension operations are based on 32-bit integers,
+	-- split the 64-bit length of the payload (n) into two 32-bit ints
+
+	-- The bit.tobit function normalizes numbers outside the 32-bit range by
+	-- returning their least-significant 32-bits. This is the first 32-bit
+	-- int
 	local lsb = bit.tobit(n)
-	-- bit module operations return signed 32-bit integers, but, we need an
-	-- unsigned integer for the subsequent step
+	-- BitOp extension operations return signed 32-bit integers, but, the
+	-- next step requires an unsigned integer
 	lsb = ffi.new("uint32_t", lsb)
 	lsb = tonumber(lsb)
-	-- now get the most-significant 4 bytes
+	-- now get the most-significant 32 bits of the 64-bit length of the
+	-- payload (n). This is the second 32-bit int.
 	local msb = (n - lsb)/UINT32_MAX
 
-	-- split the most-significant 4 bytes of the length of the payload (n),
-	-- further. The most-significant 2 bytes of that result become the
-	-- least-significant 2 bytes of our 32-bit int
+	-- split our second 32-bit int further. The most-significant 16 bits of
+	-- that result become the least-significant 16 bits of the data frame
 	n = bit.rshift(msb, OCTECT*2)
-	i = bit.bor(i, n)
+	f = bit.bor(f, n)
 
-	-- we're done with our 32-bit int
-	push(buf, i, 4)
+	-- push the first 32 bits of the data frame
+	push(buf, f, 4)
 
-	-- push the least-significant 2 bytes of the result of the last operation
-	-- , i.e., bytes 4-6 of the 64-bit length of the payload (n)
+	-- push the least-significant 16 bits of the result of the last operation
+	-- , i.e., bytes 5 and 6 of the 64-bit length of the payload (n), as the
+	-- next part of the data frame
 	msb = bit.band(msb, UINT16_MAX)
 	push(buf, msb, 2)
 
-	-- finally push the last-significant 4 bytes of the 64-bit length of the
-	-- payload (n)
+	-- push the first 32-bit int as the next part of the data frame
 	push(buf, lsb, 4)
 end
 
