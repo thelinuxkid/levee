@@ -28,11 +28,12 @@ local MASK = 0x800000
 
 local BYTE = 255
 local OCTECT = 8
+local LEN_8 = 125
 local LEN_16 = 126
 local LEN_64 = 127
-local LEN_8_MAX = 125
-local LEN_16_MAX = 0xffff
-local LEN_64_MAX = 0xffffffffffffffff
+local UINT16_MAX = 0xffff
+local UINT32_MAX = 0xffffffff
+local UINT64_MAX = 0xffffffffffffffff
 
 
 local ws = {}
@@ -255,17 +256,13 @@ ws.encode = function(buf, fin, mask, n, opcode)
 	-- if n > UINT16_MAX and n <= UINT64_MAX then l = 127
 	local l = n
 
-	-- the number of bytes need to encode the actual length of the
-	-- payload (n). This is 2 if n <= 125 else it's 4.
-	local b = 2
-
-	if n > LEN_64_MAX then return errors.ws.LENGTH end
-	if n > LEN_16_MAX then
+	-- TODO this next line replace with a line at the beginning guarding for
+	-- values outside of 2^51 (see http://bitop.luajit.org/semantics.html)
+	if n > UINT64_MAX then return errors.ws.LENGTH end
+	if n > UINT16_MAX then
 		l = LEN_64
-		b = 4
-	elseif n > LEN_8_MAX then
+	elseif n > LEN_8 then
 		l = LEN_16
-		b = 4
 	end
 
 	-- shift payload len to the appropriate place in our 32-bit int,
@@ -275,23 +272,50 @@ ws.encode = function(buf, fin, mask, n, opcode)
 	-- combine the shifted payload len with our 32-bit int
 	i = bit.bor(i, s)
 
-	if b == 2 then
-		-- leave only the most significant 2 bytes
+	if n <= LEN_8 then
+		-- leave only the most-significant 2 bytes
 		i = bit.rshift(i, OCTECT*2)
+		push(buf, i, 2)
+		return
 	end
 
 	if l == LEN_16 then
-		-- encode the length of the payload (n) in the last 2 bytes of our
-		-- 32-bit int
+		-- encode the length of the payload (n) in the least-significant 2
+		-- bytes of our 32-bit int
 		i = bit.bor(i, n)
+		push(buf, i, 4)
+		return
 	end
 
-	if l == LEN_64 then
-	end
+	-- since all bit module operations are based on 32-bit integers, split
+	-- the 64-bit length of the payload (n) into two 32-bit ints. The
+	-- bit.tobit function normalizes numbers outside the 32-bit range by
+	-- returning their least-significant 4 bytes
+	local lsb = bit.tobit(n)
+	-- bit module operations return signed 32-bit integers, but, we need an
+	-- unsigned integer for the subsequent step
+	lsb = ffi.new("uint32_t", lsb)
+	lsb = tonumber(lsb)
+	-- now get the most-significant 4 bytes
+	local msb = (n - lsb)/UINT32_MAX
 
-	push(buf, i, b)
+	-- split the most-significant 4 bytes of the length of the payload (n),
+	-- further. The most-significant 2 bytes of that result become the
+	-- least-significant 2 bytes of our 32-bit int
+	n = bit.rshift(msb, OCTECT*2)
+	i = bit.bor(i, n)
 
-	return nil
+	-- we're done with our 32-bit int
+	push(buf, i, 4)
+
+	-- push the least-significant 2 bytes of the result of the last operation
+	-- , i.e., bytes 4-6 of the 64-bit length of the payload (n)
+	msb = bit.band(msb, UINT16_MAX)
+	push(buf, msb, 2)
+
+	-- finally push the last-significant 4 bytes of the 64-bit length of the
+	-- payload (n)
+	push(buf, lsb, 4)
 end
 
 
