@@ -347,7 +347,7 @@ ws.client_handshake = function(hub, options)
 
 		header = headers["Sec-WebSocket-Accept"]
 		header = trim(header)
-		if not header or header ~= ws.server_key(key) then
+		if not header or header ~= ws._server_key(key) then
 			return fail(errors.ws.KEY)
 		end
 
@@ -405,7 +405,7 @@ ws.server_handshake = function(req)
 
 	headers["Upgrade"] = "websocket"
 	headers["Connection"] = "Upgrade"
-	headers["Sec-WebSocket-Accept"] = ws.server_key(key)
+	headers["Sec-WebSocket-Accept"] = ws._server_key(key)
 
 	return nil, headers
 end

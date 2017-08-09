@@ -560,7 +560,7 @@ return {
 		local headers = {
 			Upgrade="Websocket",
 			Connection="UPGRADE",
-			["Sec-WebSocket-Accept"]=ws.server_key(req.headers["Sec-WebSocket-Key"]),
+			["Sec-WebSocket-Accept"]=ws._server_key(req.headers["Sec-WebSocket-Key"]),
 		}
 		req.response:send({levee.HTTPStatus(101), headers})
 
@@ -601,7 +601,7 @@ return {
 		local headers = {
 			Upgrade="Websocket",
 			Connection="UPGRADE",
-			["Sec-WebSocket-Accept"]=ws.server_key(req.headers["Sec-WebSocket-Key"]),
+			["Sec-WebSocket-Accept"]=ws._server_key(req.headers["Sec-WebSocket-Key"]),
 		}
 		req.response:send({levee.HTTPStatus(101), headers})
 
@@ -708,7 +708,7 @@ return {
 		local err, s = serve:recv()
 		local err, req = s:recv()
 
-		local key = ws.server_key(req.headers["Sec-WebSocket-Key"])
+		local key = ws._server_key(req.headers["Sec-WebSocket-Key"])
 		key = "		"..key.."   "
 		local headers = {
 			Upgrade="websocket",
