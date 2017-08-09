@@ -147,7 +147,7 @@ ws._push_payload = function(buf, s, k)
 end
 
 
-ws.encode = function(buf, fin, opcode, mask, n)
+ws._encode = function(buf, fin, opcode, mask, n)
 	if n < 0 then return errors.ws.MINLEN end
 	if n > LEN_MAX then return errors.ws.MAXLEN end
 
@@ -424,7 +424,7 @@ ws.client_encode = function(buf, s)
 	if not s then s = "" end
 	local n = s:len()
 
-	local err = ws.encode(buf, true, BIN, true, n)
+	local err = ws._encode(buf, true, BIN, true, n)
 	if err then return err end
 
 	-- the masking key is a 32-bit value chosen at random
@@ -443,7 +443,7 @@ ws.server_encode = function(buf, s)
 	if not s then s = "" end
 	local n = s:len()
 
-	local err = ws.encode(buf, true, BIN, false, n)
+	local err = ws._encode(buf, true, BIN, false, n)
 	if err then return err end
 
 	ws._push_payload(buf, s)

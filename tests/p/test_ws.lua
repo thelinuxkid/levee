@@ -4,7 +4,7 @@ local ws = require("levee.p.ws")
 return {
 	test_encode_0_len = function()
 		local buf = levee.d.Buffer()
-		local err = ws.encode(buf, true, ws.BIN, false, 0)
+		local err = ws._encode(buf, true, ws.BIN, false, 0)
 
 		assert(not err)
 		assert.equal(buf.len, 2)
@@ -17,7 +17,7 @@ return {
 
 	test_encode_8bit_len = function()
 		local buf = levee.d.Buffer()
-		local err = ws.encode(buf, true, ws.BIN, false, 11)
+		local err = ws._encode(buf, true, ws.BIN, false, 11)
 
 		assert(not err)
 		assert.equal(buf.len, 2)
@@ -30,7 +30,7 @@ return {
 
 	test_encode_8bit_len_max = function()
 		local buf = levee.d.Buffer()
-		local err = ws.encode(buf, true, ws.BIN, false, 125)
+		local err = ws._encode(buf, true, ws.BIN, false, 125)
 
 		assert(not err)
 		assert.equal(buf.len, 2)
@@ -43,7 +43,7 @@ return {
 
 	test_encode_16bit_len = function()
 		local buf = levee.d.Buffer()
-		local err = ws.encode(buf, true, ws.BIN, false, 0xfff)
+		local err = ws._encode(buf, true, ws.BIN, false, 0xfff)
 
 		assert(not err)
 		assert.equal(buf.len, 4)
@@ -60,7 +60,7 @@ return {
 
 	test_encode_16bit_len_min = function()
 		local buf = levee.d.Buffer()
-		local err = ws.encode(buf, true, ws.BIN, false, 126)
+		local err = ws._encode(buf, true, ws.BIN, false, 126)
 
 		assert(not err)
 		assert.equal(buf.len, 4)
@@ -77,7 +77,7 @@ return {
 
 	test_encode_16bit_len_max = function()
 		local buf = levee.d.Buffer()
-		local err = ws.encode(buf, true, ws.BIN, false, 0xffff)
+		local err = ws._encode(buf, true, ws.BIN, false, 0xffff)
 
 		assert(not err)
 		assert.equal(buf.len, 4)
@@ -94,7 +94,7 @@ return {
 
 	test_encode_64bit_len = function()
 		local buf = levee.d.Buffer()
-		local err = ws.encode(buf, true, ws.BIN, false, 0xffffff)
+		local err = ws._encode(buf, true, ws.BIN, false, 0xffffff)
 
 		assert(not err)
 		assert.equal(buf.len, 10)
@@ -115,7 +115,7 @@ return {
 
 	test_encode_64bit_len_min = function()
 		local buf = levee.d.Buffer()
-		local err = ws.encode(buf, true, ws.BIN, false, 0xffff+1)
+		local err = ws._encode(buf, true, ws.BIN, false, 0xffff+1)
 
 		assert(not err)
 		assert.equal(buf.len, 10)
@@ -135,7 +135,7 @@ return {
 	test_encode_64bit_len_max = function()
 		-- the max safe range for the BitOp LuaJIT extension is +-2^51
 		local buf = levee.d.Buffer()
-		local err = ws.encode(buf, true, ws.BIN, false, 0x7ffffffffffff)
+		local err = ws._encode(buf, true, ws.BIN, false, 0x7ffffffffffff)
 
 		assert(not err)
 		assert.equal(buf.len, 10)
@@ -164,7 +164,7 @@ return {
 
 	test_encode_64bit_len_min = function()
 		local buf = levee.d.Buffer()
-		local err = ws.encode(buf, true, ws.BIN, false, 0xffff+1)
+		local err = ws._encode(buf, true, ws.BIN, false, 0xffff+1)
 
 		assert(not err)
 		assert.equal(buf.len, 10)
@@ -184,7 +184,7 @@ return {
 	test_encode_64bit_len_max = function()
 		-- the max safe range for the BitOp LuaJIT extension is +-2^51
 		local buf = levee.d.Buffer()
-		local err = ws.encode(buf, true, ws.BIN, false, 0x7ffffffffffff)
+		local err = ws._encode(buf, true, ws.BIN, false, 0x7ffffffffffff)
 
 		assert(not err)
 		assert.equal(buf.len, 10)
@@ -213,14 +213,14 @@ return {
 
 	test_encode_min_len = function()
 		local buf = levee.d.Buffer()
-		local err = ws.encode(buf, true, ws.BIN, false, -1)
+		local err = ws._encode(buf, true, ws.BIN, false, -1)
 
 		assert(err.is_ws_MINLEN)
 	end,
 
 	test_encode_max_len = function()
 		local buf = levee.d.Buffer()
-		local err = ws.encode(buf, true, ws.BIN, false, 0x7ffffffffffff+1)
+		local err = ws._encode(buf, true, ws.BIN, false, 0x7ffffffffffff+1)
 
 		assert(err.is_ws_MAXLEN)
 	end,
@@ -228,7 +228,7 @@ return {
 	test_encode_fin = function()
 		-- FIN set
 		local buf = levee.d.Buffer()
-		local err = ws.encode(buf, true, ws.BIN, false, 0)
+		local err = ws._encode(buf, true, ws.BIN, false, 0)
 
 		assert(not err)
 		assert.equal(buf.len, 2)
@@ -240,7 +240,7 @@ return {
 
 		-- FIN not set
 		buf = levee.d.Buffer()
-		err = ws.encode(buf, false, ws.BIN, false, 0)
+		err = ws._encode(buf, false, ws.BIN, false, 0)
 
 		assert(not err)
 		assert.equal(buf.len, 2)
@@ -254,7 +254,7 @@ return {
 	test_encode_mask = function()
 		-- mask set
 		local buf = levee.d.Buffer()
-		local err = ws.encode(buf, false, ws.BIN, true, 0)
+		local err = ws._encode(buf, false, ws.BIN, true, 0)
 
 		assert(not err)
 		assert.equal(buf.len, 2)
@@ -266,7 +266,7 @@ return {
 
 		-- mask not set
 		buf = levee.d.Buffer()
-		err = ws.encode(buf, false, ws.BIN, false, 0)
+		err = ws._encode(buf, false, ws.BIN, false, 0)
 
 		assert(not err)
 		assert.equal(buf.len, 2)
@@ -280,7 +280,7 @@ return {
 	test_encode_opcode = function()
 		-- cont opcode
 		buf = levee.d.Buffer()
-		err = ws.encode(buf, false, ws.CONT, false, 0)
+		err = ws._encode(buf, false, ws.CONT, false, 0)
 
 		assert(not err)
 		assert.equal(buf.len, 2)
@@ -292,7 +292,7 @@ return {
 
 		-- text opcode
 		buf = levee.d.Buffer()
-		err = ws.encode(buf, false, ws.TEXT, false, 0)
+		err = ws._encode(buf, false, ws.TEXT, false, 0)
 
 		assert(not err)
 		assert.equal(buf.len, 2)
@@ -304,7 +304,7 @@ return {
 
 		-- bin opcode
 		local buf = levee.d.Buffer()
-		local err = ws.encode(buf, false, ws.BIN, false, 0)
+		local err = ws._encode(buf, false, ws.BIN, false, 0)
 
 		assert(not err)
 		assert.equal(buf.len, 2)
@@ -316,7 +316,7 @@ return {
 
 		-- close opcode
 		local buf = levee.d.Buffer()
-		local err = ws.encode(buf, false, ws.CLOSE, false, 0)
+		local err = ws._encode(buf, false, ws.CLOSE, false, 0)
 
 		assert(not err)
 		assert.equal(buf.len, 2)
@@ -328,7 +328,7 @@ return {
 
 		-- ping opcode
 		local buf = levee.d.Buffer()
-		local err = ws.encode(buf, false, ws.PING, false, 0)
+		local err = ws._encode(buf, false, ws.PING, false, 0)
 
 		assert(not err)
 		assert.equal(buf.len, 2)
@@ -340,7 +340,7 @@ return {
 
 		-- pong opcode
 		local buf = levee.d.Buffer()
-		local err = ws.encode(buf, false, ws.PONG, false, 0)
+		local err = ws._encode(buf, false, ws.PONG, false, 0)
 
 		assert(not err)
 		assert.equal(buf.len, 2)
