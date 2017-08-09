@@ -366,7 +366,7 @@ return {
 	end,
 
 	test_server_key = function()
-		local key = ws.server_key("dGhlIHNhbXBsZSBub25jZQ==")
+		local key = ws._server_key("dGhlIHNhbXBsZSBub25jZQ==")
 		assert.equal(key, "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=")
 	end,
 }
