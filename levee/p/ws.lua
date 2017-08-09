@@ -75,10 +75,22 @@ local ws = {
 -- Helper
 
 
-ws._server_key = function(key)
-	local key = sha1.binary(key..GUID)
-	return base64.encode(key)
+ws._server_key = function(k)
+	k = sha1.binary(k..GUID)
+	return base64.encode(k)
 end
+
+ws._masking_key = function(k)
+	local m = bit.tobit(0)
+	for i=1,k:len() do
+		local c = string.sub(k, i, i)
+		c = string.byte(c)
+		m = bit.lshift(m, OCTECT)
+		m = bit.bor(m, c)
+	end
+	return m
+end
+
 
 ws._mask_payload = function(p, n, k)
 	-- applies the masking algorithm to the payload and returns the result
@@ -110,7 +122,7 @@ end
 -- The same algorithm applies regardless of the direction of the
 -- translation, i.e., the same steps are applied to mask the payload and
 -- unmask the payload
-ws._unmask_payload = mask_payload
+ws._unmask_payload = ws._mask_payload
 
 
 ws._push_frame = function(buf, b, n)
@@ -128,7 +140,7 @@ ws._push_payload = function(buf, s, k)
 	-- defined as the extension data + the application data (s).
 
 	-- TODO support extensions here
-	if k then s = mask_payload(s, s:len(), k) end
+	if k then s = ws._mask_payload(s, s:len(), k) end
 	buf:push(s)
 end
 
@@ -404,6 +416,20 @@ end
 
 
 ws.client_encode = function(buf, s)
+	-- FIN bit set, opcode of TEXT or BIN and data masked
+	if not s then s = "" end
+	local n = s:len()
+
+	local err = ws.encode(buf, true, BIN, true, n)
+	if err then return err end
+
+	-- the masking key is a 32-bit value chosen at random
+	local k = rand.integer()
+	-- use a BitOp extension operation to ensure a 32-bit integer
+	k = bit.tobit(k)
+
+	ws._push_frame(buf, k, 4)
+	ws._push_payload(buf, s, k)
 end
 
 

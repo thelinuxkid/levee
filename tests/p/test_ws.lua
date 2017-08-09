@@ -400,4 +400,30 @@ return {
 		c = buf:take(1)
 		assert.equal(string.byte(c), 244)
 	end,
+
+	test_masking_key = function()
+		local k = string.char(212)
+		k = k..string.char(135)
+		k = k..string.char(17)
+		k = k..string.char(136)
+
+		assert.equal(ws._masking_key(k), -729345656)
+	end,
+
+	test_client_encode = function()
+		local buf = levee.d.Buffer()
+		local err = ws.client_encode(buf, "Hello World")
+
+		assert(not err)
+		assert.equal(buf.len, 17)
+
+		local c = buf:take(1)
+		assert.equal(string.byte(c), 130)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 139)
+		local k = buf:take(4)
+		k = ws._masking_key(k)
+		c = buf:take(11)
+		assert.equal(ws._unmask_payload(c, 11, k), "Hello World")
+	end,
 }
