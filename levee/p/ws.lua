@@ -45,17 +45,39 @@ local function trim(s)
 end
 
 
-local function push(buf, d, n)
-	-- push n bytes from d int buf
-	-- converts from little-endian to network byte order (big-endian)
-	-- TODO support big-endian platforms
+local function nbo(b, n)
+	-- returns a table of n bytes from b in network byte order (big-endian)
+
+	-- TODO currently assumes b is in little-endian order
+	-- TODO use string.unpack if possible when Lua 5.3 is available to levee
+	local bytes = {}
 	for i=n-1,0,-1 do
 		local m = bit.lshift(BYTE, OCTECT*i)
-		local c = bit.band(d, m)
+		local c = bit.band(b, m)
 		c = bit.rshift(c, OCTECT*i)
+		table.insert(bytes, c)
+	end
+	return bytes
+end
+
+
+local function push_frame(buf, b, n)
+	-- pushes n chars from b into buf in network byte order (big-endian)
+	b = nbo(b, n)
+	for _,c in ipairs(b) do
 		c = string.char(c)
 		buf:push(c)
 	end
+end
+
+
+local function push_payload(buf, s, k)
+	-- pushes the remainder of the frame, i.e., the payload. The payload is
+	-- defined as the extension data + the application data (s).
+
+	-- TODO support extensions here
+	if k then s = mask_payload(s, s:len(), k) end
+	buf:push(s)
 end
 
 
@@ -291,7 +313,7 @@ ws.encode = function(buf, fin, opcode, mask, n)
 		-- the length of the payload (n) is encoded as payload len (l), so, the
 		-- least-significant 16 bits of the data frame are not needed
 		f = bit.rshift(f, OCTECT*2)
-		push(buf, f, 2)
+		push_frame(buf, f, 2)
 		return
 	end
 
@@ -299,7 +321,7 @@ ws.encode = function(buf, fin, opcode, mask, n)
 		-- encode the length of the payload (n) in the least-significant 16
 		-- bits of the data frame
 		f = bit.bor(f, n)
-		push(buf, f, 4)
+		push_frame(buf, f, 4)
 		return
 	end
 
@@ -325,36 +347,34 @@ ws.encode = function(buf, fin, opcode, mask, n)
 
 	-- push the first 32 bits of the data frame, i.e., the initial 32-bit int
 	-- (f)
-	push(buf, f, 4)
+	push_frame(buf, f, 4)
 
 	-- push the least-significant 16 bits of the result of the last operation
 	-- , i.e., bytes 5 and 6 of the 64-bit length of the payload (n), as the
 	-- next part of the data frame
 	msb = bit.band(msb, UINT16_MAX)
-	push(buf, msb, 2)
+	push_frame(buf, msb, 2)
 
 	-- push the least-siginificant 32 bits of the length of the payload (n)
 	-- as the next part of the data frame
-	push(buf, lsb, 4)
+	push_frame(buf, lsb, 4)
 end
 
 
-ws.client_encode = function(buf, s, n)
+ws.client_encode = function(buf, s)
 end
 
 
-ws.server_encode = function(buf, s, n)
+ws.server_encode = function(buf, s)
 	-- FIN bit set, opcode of TEXT or BIN and data not masked
 
 	if not s then s = "" end
-	if not n then n = s:len() end
+	local n = s:len()
 
-	local err, i, b = encode(buf, true, false, n)
+	local err = ws.encode(buf, true, BIN, false, n)
 	if err then return err end
 
-	-- the remainder is extension data + application data (s).
-	-- TODO support extensions here
-	buf:push(s)
+	push_payload(buf, s)
 end
 
 

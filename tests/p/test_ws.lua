@@ -351,6 +351,20 @@ return {
 		assert.equal(string.byte(c), 0)
 	end,
 
+	test_server_encode = function()
+		local buf = levee.d.Buffer()
+		local err = ws.server_encode(buf, "Hello World")
+
+		assert(not err)
+		assert.equal(buf.len, 13)
+
+		local c = buf:take(1)
+		assert.equal(string.byte(c), 130)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 11)
+		assert.equal(buf:take(11), "Hello World")
+	end,
+
 	test_server_key = function()
 		local key = ws.server_key("dGhlIHNhbXBsZSBub25jZQ==")
 		assert.equal(key, "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=")
