@@ -369,4 +369,35 @@ return {
 		local key = ws._server_key("dGhlIHNhbXBsZSBub25jZQ==")
 		assert.equal(key, "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=")
 	end,
+
+	test_mask_payload = function()
+		local key = 1434423370
+		local data = "Hello World"
+		local data = ws._mask_payload(data, data:len(), key)
+		local buf = levee.d.Buffer()
+		buf:push(data)
+
+		local c = buf:take(1)
+		assert.equal(string.byte(c), 29)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 26)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 252)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 38)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 58)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 95)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 199)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 37)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 39)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 19)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 244)
+	end,
 }
