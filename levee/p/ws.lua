@@ -61,6 +61,39 @@ local function nbo(b, n)
 end
 
 
+local function mask_payload(p, n, k)
+	-- applies the masking algorithm to the payload and returns the result
+
+	-- masking algorithm:
+	--
+	-- octet i of the transformed data ("transformed-octet-i") is the XOR of
+	-- octet i of the original data ("original-octet-i") with octet at index
+	-- i modulo 4 of the masking key ("masking-key-octet-j"):
+	--
+	-- j                   = i MOD 4
+	-- transformed-octet-i = original-octet-i XOR masking-key-octet-j
+
+	k = nbo(k, 4)
+	local m = ""
+	for i=1,n do
+		local pt = string.sub(p, i, i)
+		pt = string.byte(pt)
+		local j = (i-1) % 4
+		local kt = k[j+1]
+		pt = bit.bxor(pt, kt)
+		pt = string.char(pt)
+		m = m..pt
+	end
+	return m
+end
+
+
+-- The same algorithm applies regardless of the direction of the
+-- translation, i.e., the same steps are applied to mask the payload and
+-- unmask the payload
+local unmask_payload = mask_payload
+
+
 local function push_frame(buf, b, n)
 	-- pushes n chars from b into buf in network byte order (big-endian)
 	b = nbo(b, n)
