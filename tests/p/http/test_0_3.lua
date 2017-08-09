@@ -571,6 +571,8 @@ return {
 	end,
 
 	test_client_upgrade_headers = function()
+		local base64 = require("levee.p.base64")
+
 		local ws = require("levee.p.ws")
 		local levee = require("levee")
 		local h = levee.Hub()
@@ -594,14 +596,16 @@ return {
 		assert.equal(req.headers["Upgrade"], "websocket")
 		assert.equal(req.headers["Connection"], "Upgrade")
 		assert.equal(req.headers["Sec-WebSocket-Version"], "13")
-		assert(req.headers["Sec-WebSocket-Key"])
 		assert.equal(req.headers["Sec-WebSocket-Protocol"], "chat, superchat")
 		assert.equal(req.headers["Sec-WebSocket-Extensions"], "foo, bar; baz=2")
+		local key = req.headers["Sec-WebSocket-Key"]
+		assert(key)
+		assert.equal(base64.decode(key):len(), 16)
 
 		local headers = {
 			Upgrade="Websocket",
 			Connection="UPGRADE",
-			["Sec-WebSocket-Accept"]=ws._server_key(req.headers["Sec-WebSocket-Key"]),
+			["Sec-WebSocket-Accept"]=ws._server_key(key),
 		}
 		req.response:send({levee.HTTPStatus(101), headers})
 
@@ -733,7 +737,7 @@ return {
 		local err, response = c:get("/chat", { headers = {
 			Upgrade="websocket",
 			Connection="Upgrade",
-			["Sec-WebSocket-Key"]="fBeb4BXsUfeifNzKSE6iFCM=",
+			["Sec-WebSocket-Key"]="fBeb4BXsUfeifNzKSE6iFA==",
 			["Sec-WebSocket-Version"]="13"}})
 
 		local err, s = serve:recv()
@@ -745,7 +749,7 @@ return {
 		assert.equal(res.headers["foo"], "bar")
 		assert.equal(res.headers["Upgrade"], "websocket")
 		assert.equal(res.headers["Connection"], "Upgrade")
-		assert.equal(res.headers["Sec-WebSocket-Accept"], "5auaBIrOcaAyKr0rvy1lvPAuLMU=")
+		assert.equal(res.headers["Sec-WebSocket-Accept"], "DaDgapiA6rEegI1Nyj/RbtiVH0k=")
 		assert(not s.closed)
 	end,
 
@@ -795,6 +799,27 @@ return {
 		local err, response = c:get("/chat", { headers = {
 			Upgrade="websocket",
 			Connection="Upgrade",
+			["Sec-WebSocket-Version"]="13"}})
+
+		local err, s = serve:recv()
+		local err = s:upgrade()
+		assert(err.is_ws_KEY)
+		assert(s.closed)
+	end,
+
+	test_server_upgrade_key_len_error = function()
+		local ws = require("levee.p.ws")
+		local levee = require("levee")
+		local h = levee.Hub()
+
+		local err, serve = h.http:listen()
+		local err, addr = serve:addr()
+
+		local err, c = h.http:connect(addr:port())
+		local err, response = c:get("/chat", { headers = {
+			Upgrade="websocket",
+			Connection="Upgrade",
+			["Sec-WebSocket-Key"]="fBeb4BXsUfeifNzKSE6iFCM=",
 			["Sec-WebSocket-Version"]="13"}})
 
 		local err, s = serve:recv()

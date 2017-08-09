@@ -39,6 +39,8 @@ local LEN_MAX = 0x7ffffffffffff
 local UINT16_MAX = 0xffff
 local UINT32_MAX = 0xffffffff
 
+local HEADER_KEY_LEN = 16
+
 
 local function trim(s)
 	if s then return (s:gsub("^%s*(.-)%s*$", "%1")) end
@@ -295,8 +297,8 @@ ws.client_handshake = function(hub, options)
 
 		headers["Upgrade"] = "websocket"
 		headers["Connection"] = "Upgrade"
-		local key = rand.bytes(16)
-		key = ffi.string(key)
+		local key = rand.bytes(HEADER_KEY_LEN)
+		key = ffi.string(key, HEADER_KEY_LEN)
 		key = base64.encode(key)
 		headers["Sec-WebSocket-Key"] = key
 		headers["Sec-WebSocket-Version"] = VERSION
@@ -399,6 +401,8 @@ ws.server_handshake = function(req)
 
 	local key = headers["Sec-WebSocket-Key"]
 	if not key then return errors.ws.KEY end
+
+	if base64.decode(key):len() ~= 16 then return errors.ws.KEY end
 
 	-- TODO use d.Map as default for headers when supported by caller
 	headers = {}
