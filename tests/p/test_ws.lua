@@ -426,4 +426,55 @@ return {
 		c = buf:take(11)
 		assert.equal(ws._unmask_payload(c, 11, k), "Hello World")
 	end,
+
+	test_client_frame = function()
+		local buf = levee.d.Buffer()
+		local err = ws.client_frame(buf, "Hello World")
+
+		assert(not err)
+		assert.equal(buf.len, 17)
+
+		local c = buf:take(1)
+		assert.equal(string.byte(c), 2)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 139)
+		local k = buf:take(4)
+		k = ws._masking_key(k)
+		c = buf:take(11)
+		assert.equal(ws._unmask_payload(c, 11, k), "Hello World")
+	end,
+
+	test_client_frame_next = function()
+		local buf = levee.d.Buffer()
+		local err = ws.client_frame_next(buf, "Hello World")
+
+		assert(not err)
+		assert.equal(buf.len, 17)
+
+		local c = buf:take(1)
+		assert.equal(string.byte(c), 0)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 139)
+		local k = buf:take(4)
+		k = ws._masking_key(k)
+		c = buf:take(11)
+		assert.equal(ws._unmask_payload(c, 11, k), "Hello World")
+	end,
+
+	test_client_frame_last = function()
+		local buf = levee.d.Buffer()
+		local err = ws.client_frame_last(buf, "Hello World")
+
+		assert(not err)
+		assert.equal(buf.len, 17)
+
+		local c = buf:take(1)
+		assert.equal(string.byte(c), 128)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 139)
+		local k = buf:take(4)
+		k = ws._masking_key(k)
+		c = buf:take(11)
+		assert.equal(ws._unmask_payload(c, 11, k), "Hello World")
+	end,
 }

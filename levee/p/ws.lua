@@ -23,6 +23,9 @@ local PING = 0x9000000
 local PONG = 0xa000000
 local MASK = 0x800000
 
+-- the default data mode. This can be either BIN or TEXT
+local MODE = BIN
+
 
 --
 -- constants
@@ -278,6 +281,28 @@ ws._encode = function(buf, fin, opcode, mask, n)
 end
 
 
+ws._client_encode = function(buf, s, fin, opcode)
+	local err = ws._encode(buf, fin, opcode, true, s:len())
+	if err then return err end
+
+	-- the masking key is a 32-bit value chosen at random
+	local k = rand.integer()
+	-- use a BitOp extension operation to ensure a 32-bit integer
+	k = bit.tobit(k)
+
+	ws._push_frame(buf, k, 4)
+	ws._push_payload(buf, s, k)
+end
+
+
+ws._server_encode = function(buf, s, fin, opcode)
+	local err = ws._encode(buf, fin, opcode, false, s:len())
+	if err then return err end
+
+	ws._push_payload(buf, s)
+end
+
+
 --
 -- Handshake
 
@@ -421,56 +446,43 @@ end
 
 ws.client_encode = function(buf, s)
 	-- FIN bit set, opcode of TEXT or BIN and data masked
-	if not s then s = "" end
-	local n = s:len()
+	return ws._client_encode(buf, s, true, MODE)
+end
 
-	local err = ws._encode(buf, true, BIN, true, n)
-	if err then return err end
 
-	-- the masking key is a 32-bit value chosen at random
-	local k = rand.integer()
-	-- use a BitOp extension operation to ensure a 32-bit integer
-	k = bit.tobit(k)
+ws.client_frame = function(buf, s)
+	-- FIN bit clear, opcode of TEXT or BIN and data masked
+	return ws._client_encode(buf, s, false, MODE)
+end
 
-	ws._push_frame(buf, k, 4)
-	ws._push_payload(buf, s, k)
+
+ws.client_frame_next = function(buf, s)
+	-- FIN bit clear, opcode of CONT and data masked
+	return ws._client_encode(buf, s, false, CONT)
+end
+
+
+ws.client_frame_last = function(buf, s)
+	-- FIN bit set, opcode of CONT and data masked
+	return ws._client_encode(buf, s, true, CONT)
 end
 
 
 ws.server_encode = function(buf, s)
 	-- FIN bit set, opcode of TEXT or BIN and data not masked
-
-	if not s then s = "" end
-	local n = s:len()
-
-	local err = ws._encode(buf, true, BIN, false, n)
-	if err then return err end
-
-	ws._push_payload(buf, s)
+	return ws._server_encode(buf, s, true, MODE)
 end
 
 
-ws.client_frame = function(buf, s, n)
+ws.server_frame = function(buf, s)
 end
 
 
-ws.client_frame_next = function(buf, s, n)
+ws.server_frame_next = function(buf, s)
 end
 
 
-ws.client_frame_last = function(buf, s, n)
-end
-
-
-ws.server_frame = function(buf, s, n)
-end
-
-
-ws.server_frame_next = function(buf, s, n)
-end
-
-
-ws.server_frame_last = function(buf, s, n)
+ws.server_frame_last = function(buf, s)
 end
 
 
