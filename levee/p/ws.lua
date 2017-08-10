@@ -525,7 +525,20 @@ ws.ping = function(buf, s)
 end
 
 
-ws.pong = function(buf)
+ws.pong = function(buf, s)
+	-- FIN bit set, opcode of PING and data not masked
+
+	-- A Pong frame sent in response to a Ping frame must have identical
+	-- "Application data" as found in the message body of the Ping frame
+	-- being replied to.
+	-- https://tools.ietf.org/html/rfc6455#section-5.5.3
+
+	local n = 0
+	if s then n = s:len() end
+	local err = ws._encode(buf, true, PONG, false, n)
+	if err then return err end
+
+	if s then ws._push_payload(buf, s) end
 end
 
 
