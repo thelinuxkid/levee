@@ -538,20 +538,21 @@ ws.client_ping = function(buf, s)
 end
 
 
-ws.pong = function(buf, s)
-	-- FIN bit set, opcode of PING and data not masked
-
-	-- A Pong frame sent in response to a Ping frame must have identical
-	-- "Application data" as found in the message body of the Ping frame
-	-- being replied to.
-	-- https://tools.ietf.org/html/rfc6455#section-5.5.3
-	return ws._ctrl(buf, s, PONG, false)
+ws.client_pong = function(buf, s)
+	-- FIN bit set, opcode of PING and data masked
+	return ws._ctrl(buf, s, PONG, true)
 end
 
 
 ws.server_ping = function(buf, s)
 	-- FIN bit set, opcode of PING and data not masked
 	return ws._ctrl(buf, s, PING, false)
+end
+
+
+ws.server_pong = function(buf, s)
+	-- FIN bit set, opcode of PING and data not masked
+	return ws._ctrl(buf, s, PONG, false)
 end
 
 
