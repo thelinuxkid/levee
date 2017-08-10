@@ -571,4 +571,12 @@ return {
 		c = buf:take(1)
 		assert.equal(string.byte(c), 11)
 	end,
+
+	test_ctrl_max_len = function()
+		local buf = levee.d.Buffer()
+		local s = string.rep("s", 126)
+		local err = ws._ctrl(buf, s, PONG)
+
+		assert(err.is_ws_MAXCTRL)
+	end,
 }

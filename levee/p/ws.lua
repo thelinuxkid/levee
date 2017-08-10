@@ -43,6 +43,8 @@ local UINT16_MAX = 0xffff
 local UINT32_MAX = 0xffffffff
 
 local HEADER_KEY_LEN = 16
+-- The maximum length of the payload of a control frame
+local CTRL_MAX = 125
 
 
 local function trim(s)
@@ -303,6 +305,18 @@ ws._server_encode = function(buf, s, fin, opcode)
 end
 
 
+ws._ctrl = function(buf, s, opcode, mask)
+	local n = 0
+	if s then n = s:len() end
+
+	if n > CTRL_MAX then return errors.ws.MAXCTRL end
+	local err = ws._encode(buf, true, opcode, mask, n)
+	if err then return err end
+
+	if s then ws._push_payload(buf, s) end
+end
+
+
 --
 -- Handshake
 
@@ -515,13 +529,7 @@ ws.ping = function(buf, s)
 
 	-- A Ping frame MAY include "Application data"
 	-- https://tools.ietf.org/html/rfc6455#section-5.5.2
-
-	local n = 0
-	if s then n = s:len() end
-	local err = ws._encode(buf, true, PING, false, n)
-	if err then return err end
-
-	if s then ws._push_payload(buf, s) end
+	return ws._ctrl(buf, s, PING, false)
 end
 
 
@@ -532,13 +540,7 @@ ws.pong = function(buf, s)
 	-- "Application data" as found in the message body of the Ping frame
 	-- being replied to.
 	-- https://tools.ietf.org/html/rfc6455#section-5.5.3
-
-	local n = 0
-	if s then n = s:len() end
-	local err = ws._encode(buf, true, PONG, false, n)
-	if err then return err end
-
-	if s then ws._push_payload(buf, s) end
+	return ws._ctrl(buf, s, PONG, false)
 end
 
 
@@ -549,6 +551,7 @@ errors.add(20103, "ws", "VERSION", "websocket version is invalid or missing")
 errors.add(20104, "ws", "METHOD", "websocket method is not GET")
 errors.add(20105, "ws", "MAXLEN", "payload length greater than 2^51")
 errors.add(20106, "ws", "MINLEN", "payload length less than 0")
+errors.add(20107, "ws", "MAXCTRL", "control frame payload length is greater than 125")
 
 
 return ws
