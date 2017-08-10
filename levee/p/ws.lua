@@ -475,14 +475,20 @@ end
 
 
 ws.server_frame = function(buf, s)
+	-- FIN bit clear, opcode of TEXT or BIN and data not masked
+	return ws._server_encode(buf, s, false, MODE)
 end
 
 
 ws.server_frame_next = function(buf, s)
+	-- FIN bit clear, opcode of CONT and data not masked
+	return ws._server_encode(buf, s, false, CONT)
 end
 
 
 ws.server_frame_last = function(buf, s)
+	-- FIN bit set, opcode of CONT and data not masked
+	return ws._server_encode(buf, s, true, CONT)
 end
 
 

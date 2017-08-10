@@ -365,6 +365,48 @@ return {
 		assert.equal(buf:take(11), "Hello World")
 	end,
 
+	test_server_frame = function()
+		local buf = levee.d.Buffer()
+		local err = ws.server_frame(buf, "Hello World")
+
+		assert(not err)
+		assert.equal(buf.len, 13)
+
+		local c = buf:take(1)
+		assert.equal(string.byte(c), 2)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 11)
+		assert.equal(buf:take(11), "Hello World")
+	end,
+
+	test_server_frame_next = function()
+		local buf = levee.d.Buffer()
+		local err = ws.server_frame_next(buf, "Hello World")
+
+		assert(not err)
+		assert.equal(buf.len, 13)
+
+		local c = buf:take(1)
+		assert.equal(string.byte(c), 0)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 11)
+		assert.equal(buf:take(11), "Hello World")
+	end,
+
+	test_server_frame_last = function()
+		local buf = levee.d.Buffer()
+		local err = ws.server_frame_last(buf, "Hello World")
+
+		assert(not err)
+		assert.equal(buf.len, 13)
+
+		local c = buf:take(1)
+		assert.equal(string.byte(c), 128)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 11)
+		assert.equal(buf:take(11), "Hello World")
+	end,
+
 	test_server_key = function()
 		local key = ws._server_key("dGhlIHNhbXBsZSBub25jZQ==")
 		assert.equal(key, "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=")
