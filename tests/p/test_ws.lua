@@ -520,9 +520,39 @@ return {
 		assert.equal(ws._unmask_payload(c, 11, k), "Hello World")
 	end,
 
-	test_ping = function()
+	test_client_ping = function()
 		local buf = levee.d.Buffer()
-		local err = ws.ping(buf)
+		local err = ws.client_ping(buf)
+
+		assert(not err)
+		assert.equal(buf.len, 6)
+
+		local c = buf:take(1)
+		assert.equal(string.byte(c), 137)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 128)
+	end,
+
+	test_client_ping_body = function()
+		local buf = levee.d.Buffer()
+		local err = ws.client_ping(buf, "Hello World")
+
+		assert(not err)
+		assert.equal(buf.len, 17)
+
+		local c = buf:take(1)
+		assert.equal(string.byte(c), 137)
+		local c = buf:take(1)
+		assert.equal(string.byte(c), 139)
+		local k = buf:take(4)
+		k = ws._masking_key(k)
+		c = buf:take(11)
+		assert.equal(ws._unmask_payload(c, 11, k), "Hello World")
+	end,
+
+	test_server_ping = function()
+		local buf = levee.d.Buffer()
+		local err = ws.server_ping(buf)
 
 		assert(not err)
 		assert.equal(buf.len, 2)
@@ -533,9 +563,9 @@ return {
 		assert.equal(string.byte(c), 0)
 	end,
 
-	test_ping_body = function()
+	test_server_ping_body = function()
 		local buf = levee.d.Buffer()
-		local err = ws.ping(buf, "Hello World")
+		local err = ws.server_ping(buf, "Hello World")
 
 		assert(not err)
 		assert.equal(buf.len, 13)
@@ -544,6 +574,7 @@ return {
 		assert.equal(string.byte(c), 137)
 		c = buf:take(1)
 		assert.equal(string.byte(c), 11)
+		assert.equal(buf:take(11), "Hello World")
 	end,
 
 	test_pong = function()

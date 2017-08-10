@@ -152,6 +152,17 @@ ws._push_payload = function(buf, s, k)
 end
 
 
+ws._push_key = function(buf)
+	-- the masking key is a 32-bit value chosen at random
+	local k = rand.integer()
+	-- use a BitOp extension operation to ensure a 32-bit integer
+	k = bit.tobit(k)
+
+	ws._push_frame(buf, k, 4)
+
+	return k
+end
+
 ws._encode = function(buf, fin, opcode, mask, n)
 	if n < 0 then return errors.ws.MINLEN end
 	if n > LEN_MAX then return errors.ws.MAXLEN end
@@ -287,12 +298,7 @@ ws._client_encode = function(buf, s, fin, opcode)
 	local err = ws._encode(buf, fin, opcode, true, s:len())
 	if err then return err end
 
-	-- the masking key is a 32-bit value chosen at random
-	local k = rand.integer()
-	-- use a BitOp extension operation to ensure a 32-bit integer
-	k = bit.tobit(k)
-
-	ws._push_frame(buf, k, 4)
+	local k = ws._push_key(buf)
 	ws._push_payload(buf, s, k)
 end
 
@@ -313,7 +319,9 @@ ws._ctrl = function(buf, s, opcode, mask)
 	local err = ws._encode(buf, true, opcode, mask, n)
 	if err then return err end
 
-	if s then ws._push_payload(buf, s) end
+	local k
+	if mask then k = ws._push_key(buf) end
+	if s then ws._push_payload(buf, s, k) end
 end
 
 
@@ -524,12 +532,9 @@ ws.close = function(buf)
 end
 
 
-ws.ping = function(buf, s)
-	-- FIN bit set, opcode of PING and data not masked
-
-	-- A Ping frame MAY include "Application data"
-	-- https://tools.ietf.org/html/rfc6455#section-5.5.2
-	return ws._ctrl(buf, s, PING, false)
+ws.client_ping = function(buf, s)
+	-- FIN bit set, opcode of PING and data masked
+	return ws._ctrl(buf, s, PING, true)
 end
 
 
@@ -541,6 +546,12 @@ ws.pong = function(buf, s)
 	-- being replied to.
 	-- https://tools.ietf.org/html/rfc6455#section-5.5.3
 	return ws._ctrl(buf, s, PONG, false)
+end
+
+
+ws.server_ping = function(buf, s)
+	-- FIN bit set, opcode of PING and data not masked
+	return ws._ctrl(buf, s, PING, false)
 end
 
 
