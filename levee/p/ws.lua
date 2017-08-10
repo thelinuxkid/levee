@@ -510,7 +510,18 @@ ws.close = function(buf)
 end
 
 
-ws.ping = function(buf)
+ws.ping = function(buf, s)
+	-- FIN bit set, opcode of PING and data not masked
+
+	-- A Ping frame MAY include "Application data"
+	-- https://tools.ietf.org/html/rfc6455#section-5.5.2
+
+	local n = 0
+	if s then n = s:len() end
+	local err = ws._encode(buf, true, PING, false, n)
+	if err then return err end
+
+	if s then ws._push_payload(buf, s) end
 end
 
 

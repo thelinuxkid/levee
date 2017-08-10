@@ -519,4 +519,30 @@ return {
 		c = buf:take(11)
 		assert.equal(ws._unmask_payload(c, 11, k), "Hello World")
 	end,
+
+	test_ping = function()
+		local buf = levee.d.Buffer()
+		local err = ws.ping(buf)
+
+		assert(not err)
+		assert.equal(buf.len, 2)
+
+		local c = buf:take(1)
+		assert.equal(string.byte(c), 137)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 0)
+	end,
+
+	test_ping_body = function()
+		local buf = levee.d.Buffer()
+		local err = ws.ping(buf, "Hello World")
+
+		assert(not err)
+		assert.equal(buf.len, 13)
+
+		local c = buf:take(1)
+		assert.equal(string.byte(c), 137)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 11)
+	end,
 }
