@@ -1,4 +1,7 @@
+local ffi = require('ffi')
+
 local levee = require("levee")
+local _ = require("levee._")
 local ws = require("levee.p.ws")
 
 return {
@@ -413,9 +416,9 @@ return {
 	end,
 
 	test_mask_payload = function()
-		local key = 1434423370
+		local key = ffi.new("uint8_t [?]", 4, 0x55, 0x7f, 0x90, 0x4a)
 		local data = "Hello World"
-		local data = ws._mask_payload(data, data:len(), key)
+		local data = _.ws.mask(key, data, data:len())
 		local buf = levee.d.Buffer()
 		buf:push(data)
 
@@ -443,15 +446,6 @@ return {
 		assert.equal(string.byte(c), 244)
 	end,
 
-	test_masking_key = function()
-		local k = string.char(212)
-		k = k..string.char(135)
-		k = k..string.char(17)
-		k = k..string.char(136)
-
-		assert.equal(ws._masking_key(k), -729345656)
-	end,
-
 	test_client_encode = function()
 		local buf = levee.d.Buffer()
 		local err = ws.client_encode(buf, "Hello World")
@@ -464,9 +458,8 @@ return {
 		c = buf:take(1)
 		assert.equal(string.byte(c), 139)
 		local k = buf:take(4)
-		k = ws._masking_key(k)
 		c = buf:take(11)
-		assert.equal(ws._unmask_payload(c, 11, k), "Hello World")
+		assert.equal(_.ws.mask(k, c, 11), "Hello World")
 	end,
 
 	test_client_frame = function()
@@ -481,9 +474,8 @@ return {
 		c = buf:take(1)
 		assert.equal(string.byte(c), 139)
 		local k = buf:take(4)
-		k = ws._masking_key(k)
 		c = buf:take(11)
-		assert.equal(ws._unmask_payload(c, 11, k), "Hello World")
+		assert.equal(_.ws.mask(k, c, 11), "Hello World")
 	end,
 
 	test_client_frame_next = function()
@@ -498,9 +490,8 @@ return {
 		c = buf:take(1)
 		assert.equal(string.byte(c), 139)
 		local k = buf:take(4)
-		k = ws._masking_key(k)
 		c = buf:take(11)
-		assert.equal(ws._unmask_payload(c, 11, k), "Hello World")
+		assert.equal(_.ws.mask(k, c, 11), "Hello World")
 	end,
 
 	test_client_frame_last = function()
@@ -515,9 +506,8 @@ return {
 		c = buf:take(1)
 		assert.equal(string.byte(c), 139)
 		local k = buf:take(4)
-		k = ws._masking_key(k)
 		c = buf:take(11)
-		assert.equal(ws._unmask_payload(c, 11, k), "Hello World")
+		assert.equal(_.ws.mask(k, c, 11), "Hello World")
 	end,
 
 	test_client_ping = function()
@@ -545,9 +535,8 @@ return {
 		local c = buf:take(1)
 		assert.equal(string.byte(c), 139)
 		local k = buf:take(4)
-		k = ws._masking_key(k)
 		c = buf:take(11)
-		assert.equal(ws._unmask_payload(c, 11, k), "Hello World")
+		assert.equal(_.ws.mask(k, c, 11), "Hello World")
 	end,
 
 	test_server_ping = function()
@@ -603,9 +592,8 @@ return {
 		local c = buf:take(1)
 		assert.equal(string.byte(c), 139)
 		local k = buf:take(4)
-		k = ws._masking_key(k)
 		c = buf:take(11)
-		assert.equal(ws._unmask_payload(c, 11, k), "Hello World")
+		assert.equal(_.ws.mask(k, c, 11), "Hello World")
 	end,
 
 	test_server_pong = function()

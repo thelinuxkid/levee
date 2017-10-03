@@ -5,6 +5,7 @@ local rand = require('levee._.rand')
 local base64 = require("levee.p.base64")
 local ssl = require("levee._.ssl")
 local Map = require("levee.d.map")
+local _ = require("levee._")
 
 
 local VERSION = "13"
@@ -87,56 +88,11 @@ ws._server_key = function(k)
 	return base64.encode(k)
 end
 
-ws._masking_key = function(k)
-	local m = bit.tobit(0)
-	for i=1,k:len() do
-		local c = string.sub(k, i, i)
-		c = string.byte(c)
-		m = bit.lshift(m, OCTECT)
-		m = bit.bor(m, c)
-	end
-	return m
-end
-
-
-ws._mask_payload = function(p, n, k)
-	-- applies the masking algorithm to the payload and returns the result
-
-	-- masking algorithm:
-	--
-	-- octet i of the transformed data ("transformed-octet-i") is the XOR of
-	-- octet i of the original data ("original-octet-i") with octet at index
-	-- i modulo 4 of the masking key ("masking-key-octet-j"):
-	--
-	-- j                   = i MOD 4
-	-- transformed-octet-i = original-octet-i XOR masking-key-octet-j
-
-	k = nbo(k, 4)
-	local m = ""
-	for i=1,n do
-		local pt = string.sub(p, i, i)
-		pt = string.byte(pt)
-		local j = (i-1) % 4
-		local kt = k[j+1]
-		pt = bit.bxor(pt, kt)
-		pt = string.char(pt)
-		m = m..pt
-	end
-	return m
-end
-
-
--- The same algorithm applies regardless of the direction of the
--- translation, i.e., the same steps are applied to mask the payload and
--- unmask the payload
-ws._unmask_payload = ws._mask_payload
-
-
 ws._push_frame = function(buf, b, n)
 	-- pushes n chars from b into buf in network byte order (big-endian)
 	b = nbo(b, n)
 	for _,c in ipairs(b) do
-		c = string.char(c)
+		local c = string.char(c)
 		buf:push(c)
 	end
 end
@@ -147,18 +103,18 @@ ws._push_payload = function(buf, s, k)
 	-- defined as the extension data + the application data (s).
 
 	-- TODO support extensions here
-	if k then s = ws._mask_payload(s, s:len(), k) end
+	if k then s = _.ws.mask(k, s, s:len()) end
 	buf:push(s)
 end
 
 
 ws._push_key = function(buf)
 	-- the masking key is a 32-bit value chosen at random
-	local k = rand.integer()
-	-- use a BitOp extension operation to ensure a 32-bit integer
-	k = bit.tobit(k)
-
-	ws._push_frame(buf, k, 4)
+	local k = rand.bytes(4)
+	for i=0,3 do
+		local c = string.char(k[i])
+		buf:push(c)
+	end
 
 	return k
 end
