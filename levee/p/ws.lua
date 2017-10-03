@@ -3,7 +3,7 @@ local ffi = require('ffi')
 local errors = require("levee.errors")
 local rand = require('levee._.rand')
 local base64 = require("levee.p.base64")
-local sha1 = require("levee.p.sha1")
+local ssl = require("levee._.ssl")
 local Map = require("levee.d.map")
 
 
@@ -83,7 +83,7 @@ local ws = {
 
 
 ws._server_key = function(k)
-	k = sha1.binary(k..GUID)
+	k = ssl.sha1(k..GUID)
 	return base64.encode(k)
 end
 
