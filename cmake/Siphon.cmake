@@ -3,7 +3,7 @@ include(ExternalProject)
 set(SIPHON_DIR "${CMAKE_CURRENT_BINARY_DIR}/siphon")
 set(SIPHON_LIB "${SIPHON_DIR}/lib/libsiphon.a")
 set(SIPHON_INC "${SIPHON_DIR}/include")
-set(SIPHON_HASH "a50ef8693d6b620ed2ee55538505d7607dcdc019")
+set(SIPHON_HASH "29d704a3fec094ffd4c3128e48423dacad183a43")
 
 if(CMAKE_OSX_SYSROOT)
 set(SIPHON_OSX_SYSROOT "-DCMAKE_OSX_SYSROOT=${CMAKE_OSX_SYSROOT}")
@@ -14,7 +14,7 @@ set(SIPHON_OSX_DEPLOYMENT_TARGET "-DCMAKE_OSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPL
 endif(CMAKE_OSX_DEPLOYMENT_TARGET)
 
 externalproject_add(siphon_project
-	GIT_REPOSITORY https://github.com/imgix/siphon.git
+	GIT_REPOSITORY https://github.com/thelinuxkid/siphon.git
 	GIT_TAG ${SIPHON_HASH}
 	PREFIX "${CMAKE_CURRENT_BINARY_DIR}/siphon_project_${SIPHON_HASH}"
 	UPDATE_COMMAND ""
