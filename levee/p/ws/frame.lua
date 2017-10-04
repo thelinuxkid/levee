@@ -1,5 +1,6 @@
-local _ = require("levee._")
 local ffi = require('ffi')
+
+local encoder = require("levee.p.ws.encoder")
 
 
 local LEN_7_MAX = 125
@@ -58,7 +59,7 @@ local function encode(buf, fin, opcode, n, key)
 		end
 	end
 
-	local err, rc = _.ws.encode_frame(buf.buf, f)
+	local err, rc = encoder.encode_frame(buf.buf, f)
 	if err then return err end
 	buf:bump(rc)
 

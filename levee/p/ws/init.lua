@@ -6,7 +6,7 @@ local base64 = require("levee.p.base64")
 local ssl = require("levee._.ssl")
 local Map = require("levee.d.map")
 local frame = require("levee.p.ws.frame")
-local _ = require("levee._")
+local encoder = require("levee.p.ws.encoder")
 
 
 local VERSION = "13"
@@ -40,7 +40,7 @@ ws._push_payload = function(buf, s, k)
 	-- defined as the extension data + the application data (s).
 
 	-- TODO support extensions here
-	if k then s = _.ws.mask(k, s, s:len()) end
+	if k then s = encoder.mask(k, s, s:len()) end
 	buf:push(s)
 end
 
@@ -74,11 +74,11 @@ end
 
 
 ws._ctrl_close = function(buf, stat, mask)
-	local s = stat and _.ws.status_string(stat) or nil
+	local s = stat and encoder.status_string(stat) or nil
 	local len = s and #s or 0
 	local k = mask and ws._masking_key() or nil
 
-	local err, rc = _.ws.encode_close(buf.buf, stat, k, len)
+	local err, rc = encoder.encode_close(buf.buf, stat, k, len)
 	if err then return err end
 	buf:bump(rc)
 
@@ -313,13 +313,13 @@ end
 
 ws.client_ping = function(buf, s)
 	-- FIN bit set, opcode of PING and data masked
-	return ws._ctrl(_.ws.encode_ping, buf, s, true)
+	return ws._ctrl(encoder.encode_ping, buf, s, true)
 end
 
 
 ws.client_pong = function(buf, s)
 	-- FIN bit set, opcode of PING and data masked
-	return ws._ctrl(_.ws.encode_pong, buf, s, true)
+	return ws._ctrl(encoder.encode_pong, buf, s, true)
 end
 
 
@@ -331,13 +331,13 @@ end
 
 ws.server_ping = function(buf, s)
 	-- FIN bit set, opcode of PING and data not masked
-	return ws._ctrl(_.ws.encode_ping, buf, s)
+	return ws._ctrl(encoder.encode_ping, buf, s)
 end
 
 
 ws.server_pong = function(buf, s)
 	-- FIN bit set, opcode of PONG and data not masked
-	return ws._ctrl(_.ws.encode_pong, buf, s)
+	return ws._ctrl(encoder.encode_pong, buf, s)
 end
 
 

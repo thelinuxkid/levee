@@ -1,7 +1,7 @@
 local ffi = require('ffi')
 
 local Buffer = require("levee.d.buffer")
-local _ = require("levee")._
+local encoder = require("levee.p.ws.encoder")
 
 
 return {
@@ -13,12 +13,12 @@ return {
 			0x5f, 0xc7, 0x25, 0x27, 0x13, 0xf4)
 		cmp = ffi.string(cmp, 11)
 
-		assert.equal(_.ws.mask(key, buf), cmp)
+		assert.equal(encoder.mask(key, buf), cmp)
 	end,
 
 	test_encode_ping = function()
 		local buf = Buffer(4096)
-		local err, rc = _.ws.encode_ping(buf.buf)
+		local err, rc = encoder.encode_ping(buf.buf)
 
 		assert(not err)
 		assert.equal(rc, 2)
@@ -32,7 +32,7 @@ return {
 
 	test_encode_pong = function()
 		local buf = Buffer(4096)
-		local err, rc = _.ws.encode_pong(buf.buf)
+		local err, rc = encoder.encode_pong(buf.buf)
 
 		assert(not err)
 		assert.equal(rc, 2)
@@ -46,7 +46,7 @@ return {
 
 	test_encode_close = function()
 		local buf = Buffer(4096)
-		local err, rc = _.ws.encode_close(buf.buf, C.SP_WS_STATUS_AWAY)
+		local err, rc = encoder.encode_close(buf.buf, C.SP_WS_STATUS_AWAY)
 
 		assert(not err)
 		assert.equal(rc, 6)

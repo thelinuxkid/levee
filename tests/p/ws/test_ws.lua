@@ -1,8 +1,8 @@
 local ffi = require('ffi')
 
 local Buffer = require("levee.d.buffer")
-local _ = require("levee._")
 local ws = require("levee.p.ws")
+local encoder = require("levee.p.ws.encoder")
 
 
 return {
@@ -80,7 +80,7 @@ return {
 		assert.equal(string.byte(c), 139)
 		local k = buf:take(4)
 		c = buf:take(11)
-		assert.equal(_.ws.mask(k, c, 11), "Hello World")
+		assert.equal(encoder.mask(k, c, 11), "Hello World")
 	end,
 
 	test_client_frame = function()
@@ -96,7 +96,7 @@ return {
 		assert.equal(string.byte(c), 139)
 		local k = buf:take(4)
 		c = buf:take(11)
-		assert.equal(_.ws.mask(k, c, 11), "Hello World")
+		assert.equal(encoder.mask(k, c, 11), "Hello World")
 	end,
 
 	test_client_frame_next = function()
@@ -112,7 +112,7 @@ return {
 		assert.equal(string.byte(c), 139)
 		local k = buf:take(4)
 		c = buf:take(11)
-		assert.equal(_.ws.mask(k, c, 11), "Hello World")
+		assert.equal(encoder.mask(k, c, 11), "Hello World")
 	end,
 
 	test_client_frame_last = function()
@@ -128,7 +128,7 @@ return {
 		assert.equal(string.byte(c), 139)
 		local k = buf:take(4)
 		c = buf:take(11)
-		assert.equal(_.ws.mask(k, c, 11), "Hello World")
+		assert.equal(encoder.mask(k, c, 11), "Hello World")
 	end,
 
 	test_client_close = function()
@@ -144,7 +144,7 @@ return {
 		assert.equal(string.byte(c), 142)
 		local k = ws._masking_key(buf:take(4))
 		c = buf:take(14)
-		c = _.ws.mask(k, c, 14)
+		c = encoder.mask(k, c, 14)
 		assert.equal(string.sub(c, 5, 14), "Going Away")
 	end,
 
@@ -189,7 +189,7 @@ return {
 		assert.equal(string.byte(c), 139)
 		local k = ws._masking_key(buf:take(4))
 		c = buf:take(11)
-		assert.equal(_.ws.mask(k, c, 11), "Hello World")
+		assert.equal(encoder.mask(k, c, 11), "Hello World")
 	end,
 
 	test_server_ping = function()
@@ -245,7 +245,7 @@ return {
 		assert.equal(string.byte(c), 139)
 		local k = ws._masking_key(buf:take(4))
 		c = buf:take(11)
-		assert.equal(_.ws.mask(k, c, 11), "Hello World")
+		assert.equal(encoder.mask(k, c, 11), "Hello World")
 	end,
 
 	test_server_pong = function()
@@ -277,7 +277,7 @@ return {
 	test_ctrl_max_len = function()
 		local buf = Buffer(4096)
 		local s = string.rep("s", 126)
-		local err = ws._ctrl(_.ws.encode_pong, buf, s)
+		local err = ws._ctrl(encoder.encode_pong, buf, s)
 
 		assert(err.is_ws_ECTRLMAX)
 	end,
