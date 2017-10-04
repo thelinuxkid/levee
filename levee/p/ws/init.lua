@@ -5,15 +5,14 @@ local rand = require('levee._.rand')
 local base64 = require("levee.p.base64")
 local ssl = require("levee._.ssl")
 local Map = require("levee.d.map")
+local frame = require("levee.p.ws.frame")
 local _ = require("levee._")
 
 
 local VERSION = "13"
 local GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
-local LEN_7_MAX = 125
-local LEN_16_MAX = 0xffff
-local MODE = C.SP_WS_BIN
+local MODE = "BINARY"
 
 local HEADER_KEY_LEN = 16
 
@@ -21,18 +20,6 @@ local HEADER_KEY_LEN = 16
 local function trim(s)
 	if s then return (s:gsub("^%s*(.-)%s*$", "%1")) end
 end
-
-
-local Frame_mt = {}
-Frame_mt.__index = Frame_mt
-
-
-function Frame_mt:__new()
-	return ffi.new(self)
-end
-
-
-local Frame = ffi.metatype("SpWsFrame", Frame_mt)
 
 
 local ws = {}
@@ -69,41 +56,9 @@ ws._masking_key = function(k)
 end
 
 
-ws._encode = function(buf, fin, opcode, n, key)
-	local f = Frame ()
-
-	f.fin = fin
-	-- TODO support extensions here (RSV1, RSV2, RSV3)
-	f.opcode = opcode
-
-	if n then
-		f.masked = key and true or false
-
-		if n > LEN_16_MAX then
-				f.paylen.type = C.SP_WS_LEN_64
-				f.paylen.len.u64 = n
-		elseif n > LEN_7_MAX then
-				f.paylen.type = C.SP_WS_LEN_16
-				f.paylen.len.u16 = n
-		elseif n > 0 then
-				f.paylen.type = C.SP_WS_LEN_7
-				f.paylen.len.u7 = n
-		else
-				f.paylen.type = C.SP_WS_LEN_NONE
-		end
-
-		if key then f.mask_key = key  end
-	end
-
-	local err, rc = _.ws.encode_frame(buf.buf, f)
-	if err then return err end
-	buf:bump(rc)
-end
-
-
 ws._client_encode = function(buf, s, fin, opcode)
 	local k = ws._masking_key()
-	local err = ws._encode(buf, fin, opcode, s:len(), k)
+	local err = frame.encode(buf, fin, opcode, s:len(), k)
 	if err then return err end
 
 	ws._push_payload(buf, s, k)
@@ -111,7 +66,7 @@ end
 
 
 ws._server_encode = function(buf, s, fin, opcode)
-	local err = ws._encode(buf, fin, opcode, s:len())
+	local err = frame.encode(buf, fin, opcode, s:len())
 	if err then return err end
 
 	ws._push_payload(buf, s)
@@ -300,13 +255,13 @@ end
 
 ws.client_frame_next = function(buf, s)
 	-- FIN bit clear, opcode of CONT and data masked
-	return ws._client_encode(buf, s, false, C.SP_WS_CONT)
+	return ws._client_encode(buf, s, false, "CONTINUE")
 end
 
 
 ws.client_frame_last = function(buf, s)
 	-- FIN bit set, opcode of CONT and data masked
-	return ws._client_encode(buf, s, true, C.SP_WS_CONT)
+	return ws._client_encode(buf, s, true, "CONTINUE")
 end
 
 
@@ -326,13 +281,13 @@ end
 
 ws.server_frame_next = function(buf, s)
 	-- FIN bit clear, opcode of CONT and data not masked
-	return ws._server_encode(buf, s, false, C.SP_WS_CONT)
+	return ws._server_encode(buf, s, false, "CONTINUE")
 end
 
 
 ws.server_frame_last = function(buf, s)
 	-- FIN bit set, opcode of CONT and data not masked
-	return ws._server_encode(buf, s, true, C.SP_WS_CONT)
+	return ws._server_encode(buf, s, true, "CONTINUE")
 end
 
 
@@ -391,5 +346,6 @@ errors.add(20101, "ws", "HEADER", "header is invalid or missing")
 errors.add(20102, "ws", "KEY", "websocket key is invalid or missing")
 errors.add(20103, "ws", "VERSION", "websocket version is invalid or missing")
 errors.add(20104, "ws", "METHOD", "websocket method is not GET")
+
 
 return ws
