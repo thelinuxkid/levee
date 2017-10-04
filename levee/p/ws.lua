@@ -13,9 +13,6 @@ local GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 local LEN_7_MAX = 125
 local LEN_16_MAX = 0xffff
--- the maximum allowed payload length is the maximum value of an unsigned
--- 64-bit with the MSB set to 0.
-local LEN_64_MAX = 0x0fffffffffffffff
 
 local HEADER_KEY_LEN = 16
 
@@ -80,9 +77,6 @@ ws._encode = function(buf, fin, opcode, n, key)
 
 	if n then
 		f.masked = key and true or false
-
-		if n < 0 then return errors.ws.MINLEN end
-		if n > LEN_64_MAX then return errors.ws.MAXLEN end
 
 		if n > LEN_16_MAX then
 				f.paylen.type = C.SP_WS_LEN_64
@@ -392,7 +386,5 @@ errors.add(20101, "ws", "HEADER", "header is invalid or missing")
 errors.add(20102, "ws", "KEY", "websocket key is invalid or missing")
 errors.add(20103, "ws", "VERSION", "websocket version is invalid or missing")
 errors.add(20104, "ws", "METHOD", "websocket method is not GET")
-errors.add(20105, "ws", "MAXLEN", "payload length greater than 2^51")
-errors.add(20106, "ws", "MINLEN", "payload length less than 0")
 
 return ws

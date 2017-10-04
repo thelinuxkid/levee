@@ -70,18 +70,11 @@ return {
 		assert.equal(string.byte(c), 255)
 	end,
 
-	test_encode_min_len = function()
-		local buf = levee.d.Buffer(4096)
-		local err = ws._encode(buf, true, C.SP_WS_BIN, -1)
-
-		assert(err.is_ws_MINLEN)
-	end,
-
 	test_encode_max_len = function()
 		local buf = levee.d.Buffer(4096)
-		local err = ws._encode(buf, true, C.SP_WS_BIN, 0xffffffffffffffff)
+		local err = ws._encode(buf, true, C.SP_WS_BIN, 0x0fffffffffffffff+1)
 
-		assert(err.is_ws_MAXLEN)
+		assert(err.is_ws_ELENMAX)
 	end,
 
 	test_server_encode = function()
