@@ -77,6 +77,18 @@ typedef struct {
 	size_t off;          // internal offset mark
 } SpWs;
 
+int
+sp_ws_init (SpWs *p);
+
+void
+sp_ws_reset (SpWs *p);
+
+ssize_t
+sp_ws_next (SpWs *p, const void *restrict buf, size_t len);
+
+bool
+sp_ws_is_done (const SpWs *p);
+
 size_t
 sp_ws_mask (void *dst, const void *restrict buf, size_t len, const uint8_t *key);
 
