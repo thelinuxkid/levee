@@ -43,4 +43,26 @@ return {
 		c = buf:take(1)
 		assert.equal(string.byte(c), 0)
 	end,
+
+	test_encode_close = function()
+		local buf = Buffer(4096)
+		local err, rc = _.ws.encode_close(buf.buf, C.SP_WS_STATUS_AWAY)
+
+		assert(not err)
+		assert.equal(rc, 6)
+		buf:bump(rc)
+
+		local c = buf:take(1)
+		assert.equal(string.byte(c), 0x88)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 0x04)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 0x03)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 0xe9)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 0x20)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 0x20)
+	end,
 }

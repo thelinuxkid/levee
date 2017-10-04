@@ -84,7 +84,13 @@ ssize_t
 sp_ws_enc_ping (void *buf, size_t len, const uint8_t *key);
 
 ssize_t
+sp_ws_enc_frame (void *buf, const SpWsFrame *f);
+
+ssize_t
 sp_ws_enc_pong (void *buf, size_t len, const uint8_t *key);
 
 ssize_t
-sp_ws_enc_frame (void *buf, const SpWsFrame *f);
+sp_ws_enc_close (void *buf, SpWsStatus stat, size_t len, const uint8_t *key);
+
+const char *
+sp_ws_status_string (SpWsStatus stat);
