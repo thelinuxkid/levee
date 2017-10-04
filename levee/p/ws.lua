@@ -44,8 +44,6 @@ local UINT16_MAX = 0xffff
 local UINT32_MAX = 0xffffffff
 
 local HEADER_KEY_LEN = 16
--- The maximum length of the payload of a control frame
-local CTRL_MAX = 125
 
 
 local function trim(s)
@@ -108,9 +106,17 @@ ws._push_payload = function(buf, s, k)
 end
 
 
-ws._push_key = function(buf)
+ws._masking_key = function(k)
 	-- the masking key is a 32-bit value chosen at random
-	local k = rand.bytes(4)
+	if not k then return rand.bytes(4) end
+
+	return ffi.new("uint8_t [?]", 4, k)
+end
+
+
+ws._push_key = function(buf)
+	local k = ws._masking_key()
+
 	for i=0,3 do
 		local c = string.char(k[i])
 		buf:push(c)
@@ -267,16 +273,14 @@ ws._server_encode = function(buf, s, fin, opcode)
 end
 
 
-ws._ctrl = function(buf, s, opcode, mask)
-	local n = 0
-	if s then n = s:len() end
+ws._ctrl = function(fn, buf, s, mask)
+	local len = s and #s or 0
+	local k = mask and ws._masking_key() or nil
 
-	if n > CTRL_MAX then return errors.ws.MAXCTRL end
-	local err = ws._encode(buf, true, opcode, mask, n)
+	local err, rc = fn(buf.buf, k, len)
 	if err then return err end
+	buf:bump(rc)
 
-	local k
-	if mask then k = ws._push_key(buf) end
 	if s then ws._push_payload(buf, s, k) end
 end
 
@@ -490,25 +494,25 @@ end
 
 ws.client_ping = function(buf, s)
 	-- FIN bit set, opcode of PING and data masked
-	return ws._ctrl(buf, s, PING, true)
+	return ws._ctrl(_.ws.encode_ping, buf, s, true)
 end
 
 
 ws.client_pong = function(buf, s)
 	-- FIN bit set, opcode of PING and data masked
-	return ws._ctrl(buf, s, PONG, true)
+	return ws._ctrl(_.ws.encode_pong, buf, s, true)
 end
 
 
 ws.server_ping = function(buf, s)
 	-- FIN bit set, opcode of PING and data not masked
-	return ws._ctrl(buf, s, PING, false)
+	return ws._ctrl(_.ws.encode_ping, buf, s)
 end
 
 
 ws.server_pong = function(buf, s)
-	-- FIN bit set, opcode of PING and data not masked
-	return ws._ctrl(buf, s, PONG, false)
+	-- FIN bit set, opcode of PONG and data not masked
+	return ws._ctrl(_.ws.encode_pong, buf, s)
 end
 
 
@@ -519,7 +523,5 @@ errors.add(20103, "ws", "VERSION", "websocket version is invalid or missing")
 errors.add(20104, "ws", "METHOD", "websocket method is not GET")
 errors.add(20105, "ws", "MAXLEN", "payload length greater than 2^51")
 errors.add(20106, "ws", "MINLEN", "payload length less than 0")
-errors.add(20107, "ws", "MAXCTRL", "control frame payload length is greater than 125")
-
 
 return ws

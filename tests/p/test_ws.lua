@@ -511,7 +511,7 @@ return {
 	end,
 
 	test_client_ping = function()
-		local buf = levee.d.Buffer()
+		local buf = levee.d.Buffer(4096)
 		local err = ws.client_ping(buf)
 
 		assert(not err)
@@ -524,7 +524,7 @@ return {
 	end,
 
 	test_client_ping_body = function()
-		local buf = levee.d.Buffer()
+		local buf = levee.d.Buffer(4096)
 		local err = ws.client_ping(buf, "Hello World")
 
 		assert(not err)
@@ -534,13 +534,13 @@ return {
 		assert.equal(string.byte(c), 137)
 		local c = buf:take(1)
 		assert.equal(string.byte(c), 139)
-		local k = buf:take(4)
+		local k = ws._masking_key(buf:take(4))
 		c = buf:take(11)
 		assert.equal(_.ws.mask(k, c, 11), "Hello World")
 	end,
 
 	test_server_ping = function()
-		local buf = levee.d.Buffer()
+		local buf = levee.d.Buffer(4096)
 		local err = ws.server_ping(buf)
 
 		assert(not err)
@@ -553,7 +553,7 @@ return {
 	end,
 
 	test_server_ping_body = function()
-		local buf = levee.d.Buffer()
+		local buf = levee.d.Buffer(4096)
 		local err = ws.server_ping(buf, "Hello World")
 
 		assert(not err)
@@ -568,7 +568,7 @@ return {
 
 
 	test_client_pong = function()
-		local buf = levee.d.Buffer()
+		local buf = levee.d.Buffer(4096)
 		local err = ws.client_pong(buf)
 
 		assert(not err)
@@ -581,7 +581,7 @@ return {
 	end,
 
 	test_client_pong_body = function()
-		local buf = levee.d.Buffer()
+		local buf = levee.d.Buffer(4096)
 		local err = ws.client_pong(buf, "Hello World")
 
 		assert(not err)
@@ -591,13 +591,13 @@ return {
 		assert.equal(string.byte(c), 138)
 		local c = buf:take(1)
 		assert.equal(string.byte(c), 139)
-		local k = buf:take(4)
+		local k = ws._masking_key(buf:take(4))
 		c = buf:take(11)
 		assert.equal(_.ws.mask(k, c, 11), "Hello World")
 	end,
 
 	test_server_pong = function()
-		local buf = levee.d.Buffer()
+		local buf = levee.d.Buffer(4096)
 		local err = ws.server_pong(buf)
 
 		assert(not err)
@@ -610,7 +610,7 @@ return {
 	end,
 
 	test_server_pong_body = function()
-		local buf = levee.d.Buffer()
+		local buf = levee.d.Buffer(4096)
 		local err = ws.server_pong(buf, "Hello World")
 
 		assert(not err)
@@ -623,10 +623,10 @@ return {
 	end,
 
 	test_ctrl_max_len = function()
-		local buf = levee.d.Buffer()
+		local buf = levee.d.Buffer(4096)
 		local s = string.rep("s", 126)
-		local err = ws._ctrl(buf, s, PONG)
+		local err = ws._ctrl(_.ws.encode_pong, buf, s)
 
-		assert(err.is_ws_MAXCTRL)
+		assert(err.is_ws_ECTRLMAX)
 	end,
 }
