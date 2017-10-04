@@ -209,6 +209,38 @@ return {
 		assert.equal(_.ws.mask(k, c, 11), "Hello World")
 	end,
 
+	test_client_close = function()
+		local buf = levee.d.Buffer(4096)
+		local err = ws.client_close(buf, C.SP_WS_STATUS_AWAY)
+
+		assert(not err)
+		assert.equal(buf.len, 20)
+
+		local c = buf:take(1)
+		assert.equal(string.byte(c), 136)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 142)
+		local k = ws._masking_key(buf:take(4))
+		c = buf:take(14)
+		c = _.ws.mask(k, c, 14)
+		assert.equal(string.sub(c, 5, 14), "Going Away")
+	end,
+
+	test_server_close = function()
+		local buf = levee.d.Buffer(4096)
+		local err = ws.server_close(buf, C.SP_WS_STATUS_AWAY)
+
+		assert(not err)
+		assert.equal(buf.len, 16)
+
+		local c = buf:take(1)
+		assert.equal(string.byte(c), 136)
+		c = buf:take(1)
+		assert.equal(string.byte(c), 14)
+		c = buf:take(14)
+		assert.equal(string.sub(c, 5, 14), "Going Away")
+	end,
+
 	test_client_ping = function()
 		local buf = levee.d.Buffer(4096)
 		local err = ws.client_ping(buf)
@@ -264,7 +296,6 @@ return {
 		assert.equal(string.byte(c), 11)
 		assert.equal(buf:take(11), "Hello World")
 	end,
-
 
 	test_client_pong = function()
 		local buf = levee.d.Buffer(4096)

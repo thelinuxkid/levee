@@ -49,6 +49,7 @@ ws._server_key = function(k)
 	return base64.encode(k)
 end
 
+
 ws._push_payload = function(buf, s, k)
 	-- pushes the remainder of the frame, i.e., the payload. The payload is
 	-- defined as the extension data + the application data (s).
@@ -119,6 +120,19 @@ ws._server_encode = function(buf, s, fin, opcode)
 	if err then return err end
 
 	ws._push_payload(buf, s)
+end
+
+
+ws._ctrl_close = function(buf, stat, mask)
+	local s = stat and _.ws.status_string(stat) or nil
+	local len = s and #s or 0
+	local k = mask and ws._masking_key() or nil
+
+	local err, rc = _.ws.encode_close(buf.buf, stat, k, len)
+	if err then return err end
+	buf:bump(rc)
+
+	if s then ws._push_payload(buf, s, k) end
 end
 
 
@@ -337,7 +351,9 @@ end
 --
 -- Control frames
 
-ws.close = function(buf)
+ws.client_close = function(buf, stat)
+	-- FIN bit set, opcode of CLOSE and data masked
+	return ws._ctrl_close(buf, stat, true)
 end
 
 
@@ -350,6 +366,12 @@ end
 ws.client_pong = function(buf, s)
 	-- FIN bit set, opcode of PING and data masked
 	return ws._ctrl(_.ws.encode_pong, buf, s, true)
+end
+
+
+ws.server_close = function(buf, stat)
+	-- FIN bit set, opcode of CLOSE and data not masked
+	return ws._ctrl_close(buf, stat, false)
 end
 
 
