@@ -13,6 +13,7 @@ local GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 local LEN_7_MAX = 125
 local LEN_16_MAX = 0xffff
+local MODE = C.SP_WS_BIN
 
 local HEADER_KEY_LEN = 16
 
@@ -283,15 +284,17 @@ end
 -- Message encoding
 
 
-ws.client_encode = function(buf, s)
+ws.client_encode = function(buf, s, mode)
 	-- FIN bit set, opcode of TEXT or BIN and data masked
-	return ws._client_encode(buf, s, true, C.SP_WS_BIN)
+	mode = mode or MODE
+	return ws._client_encode(buf, s, true, mode)
 end
 
 
-ws.client_frame = function(buf, s)
+ws.client_frame = function(buf, s, mode)
 	-- FIN bit clear, opcode of TEXT or BIN and data masked
-	return ws._client_encode(buf, s, false, C.SP_WS_BIN)
+	mode = mode or MODE
+	return ws._client_encode(buf, s, false, mode)
 end
 
 
@@ -307,15 +310,17 @@ ws.client_frame_last = function(buf, s)
 end
 
 
-ws.server_encode = function(buf, s)
+ws.server_encode = function(buf, s, mode)
 	-- FIN bit set, opcode of TEXT or BIN and data not masked
-	return ws._server_encode(buf, s, true, C.SP_WS_BIN)
+	mode = mode or MODE
+	return ws._server_encode(buf, s, true, mode)
 end
 
 
-ws.server_frame = function(buf, s)
+ws.server_frame = function(buf, s, mode)
 	-- FIN bit clear, opcode of TEXT or BIN and data not masked
-	return ws._server_encode(buf, s, false, C.SP_WS_BIN)
+	mode = mode or MODE
+	return ws._server_encode(buf, s, false, mode)
 end
 
 
