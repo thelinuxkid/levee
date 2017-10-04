@@ -21,6 +21,14 @@ local function mask(key, buf, len)
 end
 
 
+local function encode_frame(buf, f)
+	local rc = C.sp_ws_enc_frame (buf, f);
+	if rc < 0 then return errors.get(rc) end
+
+	return nil, rc
+end
+
+
 local function encode_ping(buf, key, len)
 	len = len or 0
 	local rc = C.sp_ws_enc_ping (buf, len, key);
@@ -41,6 +49,7 @@ end
 
 return {
 	mask = mask,
+	encode_frame = encode_frame,
 	encode_ping = encode_ping,
 	encode_pong = encode_pong,
 }

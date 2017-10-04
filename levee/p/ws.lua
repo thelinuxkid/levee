@@ -11,37 +11,11 @@ local _ = require("levee._")
 local VERSION = "13"
 local GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
-
---
--- bit masks. All BitOp extension operations are based on 32-bit integers
-
-local FIN = 0x80000000
-local CONT = 0x0
-local TEXT = 0x1000000
-local BIN = 0x2000000
-local CLOSE = 0x8000000
-local PING = 0x9000000
-local PONG = 0xa000000
-local MASK = 0x800000
-
--- the default data mode. This can be either BIN or TEXT
-local MODE = BIN
-
-
---
--- constants
-
-local BYTE = 255
-local OCTECT = 8
-local LEN_8 = 125
-local LEN_16 = 126
-local LEN_64 = 127
--- the BitOp module strongly advises not to use numbers outside of the
--- -+2^51 range (see http://bitop.luajit.org/semantics.html)
-local LEN_MAX = 0x7ffffffffffff
-
-local UINT16_MAX = 0xffff
-local UINT32_MAX = 0xffffffff
+local LEN_7_MAX = 125
+local LEN_16_MAX = 0xffff
+-- the maximum allowed payload length is the maximum value of an unsigned
+-- 64-bit with the MSB set to 0.
+local LEN_64_MAX = 0x0fffffffffffffff
 
 local HEADER_KEY_LEN = 16
 
@@ -51,30 +25,19 @@ local function trim(s)
 end
 
 
-local function nbo(b, n)
-	-- returns a table of n bytes from b in network byte order (big-endian)
+local Frame_mt = {}
+Frame_mt.__index = Frame_mt
 
-	-- TODO currently assumes b is in little-endian order
-	-- TODO use string.unpack if possible when Lua 5.3 is available to levee
-	local bytes = {}
-	for i=n-1,0,-1 do
-		local m = bit.lshift(BYTE, OCTECT*i)
-		local c = bit.band(b, m)
-		c = bit.rshift(c, OCTECT*i)
-		table.insert(bytes, c)
-	end
-	return bytes
+
+function Frame_mt:__new()
+	return ffi.new(self)
 end
 
 
-local ws = {
-	CONT=CONT,
-	TEXT=TEXT,
-	BIN=BIN,
-	CLOSE=CLOSE,
-	PING=PING,
-	PONG=PONG,
-}
+local Frame = ffi.metatype("SpWsFrame", Frame_mt)
+
+
+local ws = {}
 
 
 --
@@ -85,16 +48,6 @@ ws._server_key = function(k)
 	k = ssl.sha1(k..GUID)
 	return base64.encode(k)
 end
-
-ws._push_frame = function(buf, b, n)
-	-- pushes n chars from b into buf in network byte order (big-endian)
-	b = nbo(b, n)
-	for _,c in ipairs(b) do
-		local c = string.char(c)
-		buf:push(c)
-	end
-end
-
 
 ws._push_payload = function(buf, s, k)
 	-- pushes the remainder of the frame, i.e., the payload. The payload is
@@ -108,165 +61,61 @@ end
 
 ws._masking_key = function(k)
 	-- the masking key is a 32-bit value chosen at random
-	if not k then return rand.bytes(4) end
+	if not k then k = rand.bytes(4) end
 
-	return ffi.new("uint8_t [?]", 4, k)
+	local n = ffi.new("uint8_t [4]")
+	C.memcpy(n, k, 4)
+
+	return n
 end
 
 
-ws._push_key = function(buf)
-	local k = ws._masking_key()
+ws._encode = function(buf, fin, opcode, n, key)
+	local f = Frame ()
 
-	for i=0,3 do
-		local c = string.char(k[i])
-		buf:push(c)
+	f.fin = fin
+	-- TODO support extensions here (RSV1, RSV2, RSV3)
+	f.opcode = opcode
+
+	if n then
+		f.masked = key and true or false
+
+		if n < 0 then return errors.ws.MINLEN end
+		if n > LEN_64_MAX then return errors.ws.MAXLEN end
+
+		if n > LEN_16_MAX then
+				f.paylen.type = C.SP_WS_LEN_64
+				f.paylen.len.u64 = n
+		elseif n > LEN_7_MAX then
+				f.paylen.type = C.SP_WS_LEN_16
+				f.paylen.len.u16 = n
+		elseif n > 0 then
+				f.paylen.type = C.SP_WS_LEN_7
+				f.paylen.len.u7 = n
+		else
+				f.paylen.type = C.SP_WS_LEN_NONE
+		end
+
+		if key then f.mask_key = key  end
 	end
 
-	return k
-end
-
-ws._encode = function(buf, fin, opcode, mask, n)
-	if n < 0 then return errors.ws.MINLEN end
-	if n > LEN_MAX then return errors.ws.MAXLEN end
-
-	-- WebSocket data frame:
-	--
-	--      0                   1                   2                   3
-	--      0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-	--     +-+-+-+-+-------+-+-------------+-------------------------------+
-	--     |F|R|R|R| opcode|M| Payload len |    Extended payload length    |
-	--     |I|S|S|S|  (4)  |A|     (7)     |             (16/64)           |
-	--     |N|V|V|V|       |S|             |   (if payload len==126/127)   |
-	--     | |1|2|3|       |K|             |                               |
-	--     +-+-+-+-+-------+-+-------------+ - - - - - - - - - - - - - - - +
-	--     |     Extended payload length continued, if payload len == 127  |
-	--     + - - - - - - - - - - - - - - - +-------------------------------+
-	--     |                               |Masking-key, if MASK set to 1  |
-	--     +-------------------------------+-------------------------------+
-	--     | Masking-key (continued)       |          Payload Data         |
-	--     +-------------------------------- - - - - - - - - - - - - - - - +
-	--     :                     Payload Data continued ...                :
-	--     + - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - +
-	--     |                     Payload Data continued ...                |
-	--     +---------------------------------------------------------------+
-
-
-	-- note: all BitOp extension operations return signed 32-bit ints
-
-	-- start with a 32-bit int as the data frame. This is where FIN, RSVs,
-	-- opcode, MASK and payload len will be encoded (see figure above)
-	local f = bit.tobit(0)
-
-	--
-	-- FIN bit
-
-	if fin then f = bit.bor(FIN) end
-
-	--
-	-- RSVs
-
-	-- the next three bits (RSV1, RSV2, RSV3) are set when there are
-	-- extensions present
-	-- TODO support extensions here
-
-	--
-	-- opcode
-
-	f = bit.bor(f, opcode)
-
-	--
-	-- MASK
-
-	if mask then f = bit.bor(f, MASK) end
-
-	--
-	-- payload len
-
-	-- the value to encode as payload len (l). This is different from the
-	-- length of the payload (n). Here, UINT64_MAX is the theoretical
-	-- max. The practical max for the BitOp module is 2^51 (LEN_MAX):
-	-- if n <= 125 then l = n
-	-- if n > 125 and n <= UINT16_MAX then l = 126
-	-- if n > UINT16_MAX and n <= UINT64_MAX then l = 127
-	local l = n
-
-	if n > UINT16_MAX then
-		l = LEN_64
-	elseif n > LEN_8 then
-		l = LEN_16
-	end
-
-	-- shift payload len (l) to the appropriate place in the data frame,
-	-- i.e., bits 17-23 from the least-significant bit. The most-significant
-	-- bit of payload len (l) is ignored since the allowed value range is
-	-- 0-127.
-	local s = bit.lshift(l, OCTECT*2)
-	-- add the shifted payload len (l) to the data frame
-	f = bit.bor(f, s)
-
-	if n <= LEN_8 then
-		-- the length of the payload (n) is encoded as payload len (l), so, the
-		-- least-significant 16 bits of the data frame are not needed
-		f = bit.rshift(f, OCTECT*2)
-		ws._push_frame(buf, f, 2)
-		return
-	end
-
-	if l == LEN_16 then
-		-- encode the length of the payload (n) in the least-significant 16
-		-- bits of the data frame
-		f = bit.bor(f, n)
-		ws._push_frame(buf, f, 4)
-		return
-	end
-
-	-- since all BitOp extension operations are based on 32-bit integers,
-	-- split the 64-bit length of the payload (n) into two 32-bit ints
-
-	-- The bit.tobit function normalizes numbers outside the 32-bit range by
-	-- returning their least-significant 32 bits. This is the first 32-bit
-	-- int and the lower half of the 64-bit length of the payload (n)
-	local lsb = bit.tobit(n)
-	-- BitOp extension operations return *signed* 32-bit integers, but, the
-	-- next step requires an unsigned integer
-	lsb = ffi.new("uint32_t", lsb)
-	lsb = tonumber(lsb)
-	-- now get the most-significant 32 bits. This is the second 32-bit int
-	-- and the upper half of the 64-bit length of the payload (n)
-	local msb = (n - lsb)/UINT32_MAX
-
-	-- split our second 32-bit int further. The most-significant 16 bits of
-	-- that result become the least-significant 16 bits of the data frame
-	n = bit.rshift(msb, OCTECT*2)
-	f = bit.bor(f, n)
-
-	-- push the first 32 bits of the data frame, i.e., the initial 32-bit int
-	-- (f)
-	ws._push_frame(buf, f, 4)
-
-	-- push the least-significant 16 bits of the result of the last operation
-	-- , i.e., bytes 5 and 6 of the 64-bit length of the payload (n), as the
-	-- next part of the data frame
-	msb = bit.band(msb, UINT16_MAX)
-	ws._push_frame(buf, msb, 2)
-
-	-- push the least-siginificant 32 bits of the length of the payload (n)
-	-- as the next part of the data frame
-	ws._push_frame(buf, lsb, 4)
+	local err, rc = _.ws.encode_frame(buf.buf, f)
+	if err then return err end
+	buf:bump(rc)
 end
 
 
 ws._client_encode = function(buf, s, fin, opcode)
-	local err = ws._encode(buf, fin, opcode, true, s:len())
+	local k = ws._masking_key()
+	local err = ws._encode(buf, fin, opcode, s:len(), k)
 	if err then return err end
 
-	local k = ws._push_key(buf)
 	ws._push_payload(buf, s, k)
 end
 
 
 ws._server_encode = function(buf, s, fin, opcode)
-	local err = ws._encode(buf, fin, opcode, false, s:len())
+	local err = ws._encode(buf, fin, opcode, s:len())
 	if err then return err end
 
 	ws._push_payload(buf, s)
@@ -428,49 +277,49 @@ end
 
 ws.client_encode = function(buf, s)
 	-- FIN bit set, opcode of TEXT or BIN and data masked
-	return ws._client_encode(buf, s, true, MODE)
+	return ws._client_encode(buf, s, true, C.SP_WS_BIN)
 end
 
 
 ws.client_frame = function(buf, s)
 	-- FIN bit clear, opcode of TEXT or BIN and data masked
-	return ws._client_encode(buf, s, false, MODE)
+	return ws._client_encode(buf, s, false, C.SP_WS_BIN)
 end
 
 
 ws.client_frame_next = function(buf, s)
 	-- FIN bit clear, opcode of CONT and data masked
-	return ws._client_encode(buf, s, false, CONT)
+	return ws._client_encode(buf, s, false, C.SP_WS_CONT)
 end
 
 
 ws.client_frame_last = function(buf, s)
 	-- FIN bit set, opcode of CONT and data masked
-	return ws._client_encode(buf, s, true, CONT)
+	return ws._client_encode(buf, s, true, C.SP_WS_CONT)
 end
 
 
 ws.server_encode = function(buf, s)
 	-- FIN bit set, opcode of TEXT or BIN and data not masked
-	return ws._server_encode(buf, s, true, MODE)
+	return ws._server_encode(buf, s, true, C.SP_WS_BIN)
 end
 
 
 ws.server_frame = function(buf, s)
 	-- FIN bit clear, opcode of TEXT or BIN and data not masked
-	return ws._server_encode(buf, s, false, MODE)
+	return ws._server_encode(buf, s, false, C.SP_WS_BIN)
 end
 
 
 ws.server_frame_next = function(buf, s)
 	-- FIN bit clear, opcode of CONT and data not masked
-	return ws._server_encode(buf, s, false, CONT)
+	return ws._server_encode(buf, s, false, C.SP_WS_CONT)
 end
 
 
 ws.server_frame_last = function(buf, s)
 	-- FIN bit set, opcode of CONT and data not masked
-	return ws._server_encode(buf, s, true, CONT)
+	return ws._server_encode(buf, s, true, C.SP_WS_CONT)
 end
 
 
