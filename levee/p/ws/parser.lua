@@ -51,6 +51,21 @@ function Parser_mt:next(buf, len)
 end
 
 
+function Parser_mt:_paylen()
+	local n = 0
+	if self.as.paylen.type == C.SP_WS_LEN_64 then
+		n = self.as.paylen.len.u64
+	end
+	if self.as.paylen.type == C.SP_WS_LEN_16 then
+		n = self.as.paylen.len.u16
+	end
+	if self.as.paylen.type == C.SP_WS_LEN_7 then
+		n = self.as.paylen.len.u7
+	end
+	return tonumber(n)
+end
+
+
 function Parser_mt:is_done()
 	return C.sp_ws_is_done(self)
 end
@@ -58,32 +73,25 @@ end
 
 function Parser_mt:value(buf, n)
 	if self.type == C.SP_WS_META then
-		local n
+		local l
 		if (self.as.paylen.type == C.SP_WS_LEN_7) then
-			n = tonumber(self.as.paylen.len.u7)
+			l = tonumber(self.as.paylen.len.u7)
 		end
 		return
 			self.as.fin,
 			opcodes[tonumber(self.as.opcode)],
 			self.as.masked,
-			n
+			l
 	elseif self.type == C.SP_WS_PAYLEN then
-		local n = 0
-		if self.as.paylen.type == C.SP_WS_LEN_64 then
-			n = self.as.paylen.len.u64
-		end
-		if self.as.paylen.type == C.SP_WS_LEN_16 then
-			n = self.as.paylen.len.u16
-		end
-		if self.as.paylen.type == C.SP_WS_LEN_7 then
-			n = self.as.paylen.len.u7
-		end
-		return n > 0 and tonumber(n) or nil
+		local l = self:_paylen()
+		return l > 0 and l or nil
 	elseif self.type == C.SP_WS_MASK_KEY then
 		return self.as.mask_key
 	elseif self.type == C.SP_WS_PAYLOAD then
 		local s = ffi.string(buf, n)
 		if self.as.masked then s = self:unmask(buf, n) end
+		local l = self:_paylen()
+		if s:len() > l then s = string.sub(s, 1, l) end
 		return s
 	end
 end

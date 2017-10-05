@@ -305,6 +305,7 @@ end
 
 ws.client_decode = function(stream)
 	local err, f = ws._decode(stream)
+	if err then return err end
 	if f.masked then return errors.ws.MASKED end
 
 	return nil, f
@@ -313,6 +314,7 @@ end
 
 ws.server_decode = function(stream)
 	local err, f = ws._decode(stream)
+	if err then return err end
 	if not f.masked then return errors.ws.UNMASKED end
 
 	return nil, f
