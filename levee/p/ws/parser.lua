@@ -33,6 +33,15 @@ function Parser_mt:reset()
 end
 
 
+function Parser_mt:unmask(buf, len)
+	local dst = ffi.new("uint8_t [?]", len)
+	local rc = C.sp_ws_unmask(self, dst, buf, len)
+	if rc < 0 then errors.get(rc) end
+
+	return ffi.string(dst, rc)
+end
+
+
 function Parser_mt:next(buf, len)
 	local rc = C.sp_ws_next(self, buf, len)
 	if rc >= 0 then
@@ -47,7 +56,7 @@ function Parser_mt:is_done()
 end
 
 
-function Parser_mt:value()
+function Parser_mt:value(buf, n)
 	if self.type == C.SP_WS_META then
 		local n
 		if (self.as.paylen.type == C.SP_WS_LEN_7) then
@@ -72,6 +81,10 @@ function Parser_mt:value()
 		return n > 0 and tonumber(n) or nil
 	elseif self.type == C.SP_WS_MASK_KEY then
 		return self.as.mask_key
+	elseif self.type == C.SP_WS_PAYLOAD then
+		local s = ffi.string(buf, n)
+		if self.as.masked then s = self:unmask(buf, n) end
+		return s
 	end
 end
 
@@ -81,7 +94,7 @@ function Parser_mt:stream_next(stream)
 	if err then return err end
 
 	if n > 0 then
-		local value = {self:value(stream:value())}
+		local value = {self:value(stream:value(n))}
 		stream:trim(n)
 		if self:is_done() then
 			self:reset()
