@@ -7,6 +7,7 @@ local ssl = require("levee._.ssl")
 local Map = require("levee.d.map")
 local frame = require("levee.p.ws.frame")
 local encoder = require("levee.p.ws.encoder")
+local parser = require("levee.p.ws.parser")
 
 
 local VERSION = "13"
@@ -53,6 +54,14 @@ ws._masking_key = function(k)
 	C.memcpy(n, k, 4)
 
 	return n
+end
+
+
+ws._decode = function(stream)
+	local p = parser()
+	p:init()
+
+	return frame.decode(p, stream)
 end
 
 
@@ -295,10 +304,18 @@ end
 -- Message decoding
 
 ws.client_decode = function(stream)
+	local err, f = ws._decode(stream)
+	if f.masked then return errors.ws.MASKED end
+
+	return nil, f
 end
 
 
 ws.server_decode = function(stream)
+	local err, f = ws._decode(stream)
+	if not f.masked then return errors.ws.UNMASKED end
+
+	return nil, f
 end
 
 
@@ -346,6 +363,8 @@ errors.add(20101, "ws", "HEADER", "header is invalid or missing")
 errors.add(20102, "ws", "KEY", "websocket key is invalid or missing")
 errors.add(20103, "ws", "VERSION", "websocket version is invalid or missing")
 errors.add(20104, "ws", "METHOD", "websocket method is not GET")
+errors.add(20105, "ws", "MASKED", "server data is masked")
+errors.add(20106, "ws", "UNMASKED", "client data is not masked")
 
 
 return ws

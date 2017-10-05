@@ -1,5 +1,6 @@
 local ffi = require('ffi')
 
+local levee = require("levee")
 local Buffer = require("levee.d.buffer")
 local ws = require("levee.p.ws")
 local encoder = require("levee.p.ws.encoder")
@@ -280,5 +281,63 @@ return {
 		local err = ws._ctrl(encoder.encode_pong, buf, s)
 
 		assert(err.is_ws_ECTRLMAX)
+	end,
+
+	test_server_decode = function()
+		local data = "\xd9\x8b\x55\x7f\x90\x4a\x1d\x1a\xfc\x26\x3a\x5f\xc7\x25\x27\x13\xf4"
+
+		local h = levee.Hub()
+		local r, w = h.io:pipe()
+		local stream = r:stream()
+		w:write(data)
+
+		local err, f = ws.server_decode(stream)
+		assert(not err)
+		assert(f.fin)
+		assert.equal(f.opcode, "PING")
+		assert.equal(f.n, 11)
+		assert(f.masked)
+		assert.equal(f.s, "Hello World")
+	end,
+
+	test_server_decode_unmasked = function()
+		local data = "\xd9\x0b\x48\x65\x6c\x6c\x6f\x20\x57\x6f\x72\x6c\x64"
+
+		local h = levee.Hub()
+		local r, w = h.io:pipe()
+		local stream = r:stream()
+		w:write(data)
+
+		local err, f = ws.server_decode(stream)
+		assert(err.is_ws_UNMASKED)
+	end,
+
+	test_client_decode = function()
+		local data = "\xd9\x0b\x48\x65\x6c\x6c\x6f\x20\x57\x6f\x72\x6c\x64"
+
+		local h = levee.Hub()
+		local r, w = h.io:pipe()
+		local stream = r:stream()
+		w:write(data)
+
+		local err, f = ws.client_decode(stream)
+		assert(not err)
+		assert(f.fin)
+		assert.equal(f.opcode, "PING")
+		assert.equal(f.n, 11)
+		assert(not f.masked)
+		assert.equal(f.s, "Hello World")
+	end,
+
+	test_client_decode_masked = function()
+		local data = "\xd9\x8b\x55\x7f\x90\x4a\x1d\x1a\xfc\x26\x3a\x5f\xc7\x25\x27\x13\xf4"
+
+		local h = levee.Hub()
+		local r, w = h.io:pipe()
+		local stream = r:stream()
+		w:write(data)
+
+		local err, f = ws.client_decode(stream)
+		assert(err.is_ws_MASKED)
 	end,
 }
