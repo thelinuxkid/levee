@@ -1,6 +1,7 @@
 local ffi = require('ffi')
 
 local encoder = require("levee.p.ws.encoder")
+local parser = require("levee.p.ws.parser")
 
 
 local LEN_7_MAX = 125
@@ -26,6 +27,36 @@ end
 
 
 local mt = ffi.metatype("SpWsFrame", Frame_mt)
+
+
+local function decode(parser, stream)
+	local err, value = parser:stream_next(stream)
+	if err then return err end
+	local f = {fin=value[1], opcode=value[2], masked=value[3], n=value[4]}
+
+	if parser:is_done() then return nil, f end
+
+	if not f.n then
+		local err, value = parser:stream_next(stream)
+		if err then return err end
+		f.n = value[1]
+	end
+
+	if f.masked then
+		local err, value = parser:stream_next(stream)
+		if err then return err end
+		f.key = value[1]
+	end
+
+	f.s = ''
+	while not parser:is_done() do
+		local err, value = parser:stream_next(stream)
+		if err then return err end
+		f.s = f.s..value[1]
+	end
+
+	return nil, f
+end
 
 
 local function encode(buf, fin, opcode, n, key)
@@ -68,4 +99,5 @@ end
 
 return {
 	encode=encode,
+	decode=decode,
 }

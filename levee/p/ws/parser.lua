@@ -96,9 +96,6 @@ function Parser_mt:stream_next(stream)
 	if n > 0 then
 		local value = {self:value(stream:value(n))}
 		stream:trim(n)
-		if self:is_done() then
-			self:reset()
-		end
 		return nil, value
 	end
 
